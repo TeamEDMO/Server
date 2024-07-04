@@ -4,6 +4,13 @@ from aiohttp import web
 from EDMOSerial import EDMOSerial, SerialProtocol
 from EDMOSession import EDMOSession
 from Utilities.Bindable import Bindable
+from aiortc.contrib.signaling import object_from_string, object_to_string
+
+from aiortc import (
+    RTCSessionDescription,
+)
+
+from WebRTCPeer import WebRTCPeer
 
 
 class EDMOBackend:
@@ -11,6 +18,8 @@ class EDMOBackend:
         self.candidateSessions: dict[str, EDMOSession] = {}
         self.allSessions: dict[str, EDMOSession] = {}
         self.edmoSerial = EDMOSerial()
+        self.edmoSerial.onConnect.append(self.onEDMOConnected)
+        self.edmoSerial.onDisconnect.append(self.onEDMODisconnect)
         pass
 
     def onEDMOConnected(self, protocolBindable: Bindable[SerialProtocol]):
@@ -42,31 +51,68 @@ class EDMOBackend:
     async def onShutdown(self, app: web.Application):
         pass
 
-    async def onConnect(self, request: web.Request) -> web.WebSocketResponse:
+    async def onPlayerConnect(self, request: web.Request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        await ws.send_str("test")
 
-        print("something happened")
+        identifier = request.match_info["identifier"]
+
+        async for msg in ws:
+            print(msg)
+            if msg.type == web.WSMsgType.TEXT:
+                data = object_from_string(msg.data)
+                # we are only looking for one thing from the websocket
+                if isinstance(data, RTCSessionDescription):
+                    player = WebRTCPeer(request.remote)
+
+                    answer = await player.initiateConnection(data)
+
+                    await ws.send_str(object_to_string(answer))
+
+                    self.allSessions[identifier].registerPlayer(player)
 
         return ws
+
+    # This returns the available sessions and their capacities in a json list
+    async def getSessionInfo(self, request: web.Request):
+        sessions = []
+        for candidateSession in self.candidateSessions:
+            sessionInfo = {}
+            sessionInfo["identifier"] = candidateSession
+
+            edmoSession = self.candidateSessions[candidateSession]
+
+            sessionInfo["activePlayers"] = len(edmoSession.activePlayers)
+            sessionInfo["MaxPlayers"] = len(edmoSession.motors)
+
+            sessions.append(sessionInfo)
+
+        response = web.json_response(sessions)
+        return response
 
     async def update(self):
         # Update the serial stuff
         serialUpdateTask = asyncio.create_task(self.edmoSerial.update())
 
+        # Update all sessions
+        sessionUpdates = []
+
+        for sessionID in self.candidateSessions:
+            session = self.candidateSessions[sessionID]
+            sessionUpdates.append(asyncio.create_task(session.update()))
+
         # Ensure that the update cycle runs at most 10 times a second
-        minUpdateDuration = asyncio.create_task(asyncio.sleep(0.1))
+        minUpdateDuration = asyncio.create_task(asyncio.sleep(0.5))
 
         await serialUpdateTask
+        await asyncio.wait(sessionUpdates)
         await minUpdateDuration
 
     async def run(self) -> None:
         app = web.Application()
         app.on_shutdown.append(self.onShutdown)
-        app.router.add_route("GET", "/", self.onConnect)
-
-        web.run_app
+        app.router.add_route("GET", "/controller/{identifier}", self.onPlayerConnect)
+        app.router.add_route("GET", "/sessions", self.getSessionInfo)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -75,6 +121,8 @@ class EDMOBackend:
         await site.start()
 
         closed = False
+        self.createDummySession("Bloom")
+        self.createDummySession("Floral")
 
         try:
             while not closed:
@@ -84,6 +132,15 @@ class EDMOBackend:
         finally:
             await site.stop()
             await runner.cleanup()
+
+    def createDummySession(self, identifier : str):
+        protocolBindable = Bindable[SerialProtocol]()
+
+        newSession = EDMOSession(protocolBindable, 4)
+
+        self.allSessions[identifier] = newSession
+        self.candidateSessions[identifier] = newSession
+
 
 
 async def main():

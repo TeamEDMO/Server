@@ -1,5 +1,8 @@
 import asyncio
 from aiohttp import web
+import aiohttp
+import aiohttp.client_exceptions
+import aiohttp.web_exceptions
 
 from EDMOSerial import EDMOSerial, SerialProtocol
 from EDMOSession import EDMOSession
@@ -48,7 +51,8 @@ class EDMOBackend:
         # This is because the connection may be reestablished
         #  and we want to allow a seamless recovery for existing users
 
-    async def onShutdown(self, app: web.Application):
+    async def onShutdown(self):
+        self.edmoSerial.close()
         pass
 
     async def onPlayerConnect(self, request: web.Request):
@@ -90,6 +94,10 @@ class EDMOBackend:
         response = web.json_response(sessions)
         return response
 
+    async def shutdown(self, request: web.Request):
+        print("Shutting down gracefully...")
+        raise web.GracefulExit()
+
     async def update(self):
         # Update the serial stuff
         serialUpdateTask = asyncio.create_task(self.edmoSerial.update())
@@ -105,24 +113,24 @@ class EDMOBackend:
         minUpdateDuration = asyncio.create_task(asyncio.sleep(0.5))
 
         await serialUpdateTask
-        await asyncio.wait(sessionUpdates)
+        if len(sessionUpdates) > 0:
+            await asyncio.wait(sessionUpdates)
         await minUpdateDuration
 
     async def run(self) -> None:
         app = web.Application()
-        app.on_shutdown.append(self.onShutdown)
+        # app.on_shutdown.append(self.onShutdown)
         app.router.add_route("GET", "/controller/{identifier}", self.onPlayerConnect)
         app.router.add_route("GET", "/sessions", self.getSessionInfo)
 
         runner = web.AppRunner(app)
         await runner.setup()
+        runner.shutdown_callback = self.onShutdown
 
         site = web.TCPSite(runner, "localhost", 8080)
         await site.start()
 
         closed = False
-        self.createDummySession("Bloom")
-        self.createDummySession("Floral")
 
         try:
             while not closed:
@@ -130,10 +138,9 @@ class EDMOBackend:
         except (asyncio.exceptions.CancelledError, KeyboardInterrupt):
             pass
         finally:
-            await site.stop()
             await runner.cleanup()
 
-    def createDummySession(self, identifier : str):
+    def createDummySession(self, identifier: str):
         protocolBindable = Bindable[SerialProtocol]()
 
         newSession = EDMOSession(protocolBindable, 4)
@@ -142,11 +149,11 @@ class EDMOBackend:
         self.candidateSessions[identifier] = newSession
 
 
-
 async def main():
     server = EDMOBackend()
     await server.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(), debug=True)
+    

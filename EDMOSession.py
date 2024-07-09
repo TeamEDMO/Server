@@ -98,5 +98,5 @@ class EDMOSession:
 
         for motor in self.motors:
             command = motor.asCommand()
-            #print(command)
+            # print(command)
             self.protocol.getNonNullValue().write(command)

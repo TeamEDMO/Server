@@ -40,8 +40,15 @@ class EDMOMotor:
 
     def asCommand(self):
         command = struct.pack(
-            "@Iffff", self._id, self._freq, self._amp, self._offset, self._phaseShift
+            "@Iffff",
+            self._id,
+            self._freq,
+            self._amp,
+            self._offset,
+            self._phaseShift,
         )
-        print(command)
 
-        return command
+        full = b'\x01' + command
+        print(full)
+
+        return full

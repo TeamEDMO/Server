@@ -1,6 +1,8 @@
 import asyncio
+from logging import info, log
 from typing import Callable, cast
 import serial
+import serial.serialutil
 import serial_asyncio
 import serial.tools.list_ports
 from serial.tools.list_ports_common import ListPortInfo
@@ -16,40 +18,48 @@ class SerialProtocol(asyncio.Protocol):
         self.disconnectCallbacks = list[Callable[[Self], None]]()
         self.identifying = False
         self.receivedData = list[bytes]()
-        self.identifier = "AAAA"
+        self.identifier = ""
         self.closed = False
         self.device = ""
 
     def connection_made(self, transport: SerialTransport):  # type: ignore
         self.transport = transport
 
-        """transport.write(b"id")
-        self.identifying = True"""
+        self.identifying = True
+        print(bytes([0]))
+        transport.write(bytes([0]))
 
-        self.identifier = self.device
+        # self.identifier = self.device
 
+        print("port opened: ", transport)
+
+    def deviceIdentified(self):
         for callback in self.connectionCallbacks:
             callback(self)
 
-        print("port opened", transport)
-
     def data_received(self, data):
+        # print("loopback: ", data)
         if self.identifying:
             self.identifier = repr(data)
-            if len(self.identifier) != "Bloom":
-                self.transport.close()
+            self.identifying = False
+            self.deviceIdentified()
 
+            # self.transport.close()
             return
 
         # print("data received", repr(data))
         self.receivedData.append(data)
 
     def connection_lost(self, exc):
-        for callback in self.disconnectCallbacks:
-            callback(self)
-
         print("port closed")
         self.closed = True
+        # Identification never occured in time
+        # We don't need to inform subscribers
+        if self.identifier == "":
+            return
+
+        for callback in self.disconnectCallbacks:
+            callback(self)
 
     def pause_writing(self):
         print("pause writing")
@@ -64,10 +74,14 @@ class SerialProtocol(asyncio.Protocol):
         self.transport.resume_reading()
 
     def write(self, data: bytes):
+        if self.closed:
+            return
+
         self.transport.write(data)
 
     def close(self):
-        self.transport.close()
+        self.closed = True
+        self.transport.serial.close()  # type: ignore
 
 
 class EDMOSerial:

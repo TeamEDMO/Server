@@ -48,7 +48,12 @@ class EDMOMotor:
             self._phaseShift,
         )
 
-        full = b'\x01' + command
+        commandBA = bytearray(b"\x01" + command + b"ED")
+        commandBA = commandBA.replace(b"ED", b"E\\D")
+        commandBA = commandBA.replace(b"MO", b"M\\O")
+        escapedCommand = bytes(commandBA)
+
+        full = b"E" + b"D" + escapedCommand + b"M" + b"O"
         print(full)
 
         return full

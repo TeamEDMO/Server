@@ -21,10 +21,10 @@ class WebRTCPeer:
         self._pc.on("iceconnectionstatechange", self.onICEStateChange)
         self._pc.on("icecandidate", self.onICECandidate)
 
-        self.onMessage = list[Callable[[Self, str], None]]()
-        self.onDisconnectCallbacks = list[Callable[[Self], None]]()
-        self.onConnectCallbacks = list[Callable[[Self], None]]()
-        self.onClosedCallbacks = list[Callable[[Self], None]]()
+        self.onMessage = list[Callable[[str], None]]()
+        self.onDisconnectCallbacks = list[Callable[[], None]]()
+        self.onConnectCallbacks = list[Callable[[], None]]()
+        self.onClosedCallbacks = list[Callable[[], None]]()
 
         self.closed = False
         self.connected = False
@@ -48,7 +48,7 @@ class WebRTCPeer:
         print(message)
 
         for callback in self.onMessage:
-            callback(self, message)
+            callback(message)
 
         pass
 
@@ -58,7 +58,7 @@ class WebRTCPeer:
 
         self.connected = True
         for callback in self.onConnectCallbacks:
-            callback(self)
+            callback()
 
     def onDisconnect(self):
         if not self.connected:
@@ -66,7 +66,7 @@ class WebRTCPeer:
 
         self.connected = False
         for callback in self.onDisconnectCallbacks:
-            callback(self)
+            callback()
 
     def onDataChannel(self, channel: RTCDataChannel):
         self._dataChannel = channel
@@ -116,4 +116,4 @@ class WebRTCPeer:
 
         self.closed = True
         for callback in self.onClosedCallbacks:
-            callback(self)
+            callback()

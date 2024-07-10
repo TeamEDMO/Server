@@ -18,6 +18,10 @@ class EDMOPlayer:
         self.rtc = rtcPeer
         self.session = edmoSession
         self.number = -1
+        rtcPeer.onMessage.append(self.onMessage)
+        rtcPeer.onConnectCallbacks.append(self.onConnect)
+        rtcPeer.onDisconnectCallbacks.append(self.onDisconnect)
+        rtcPeer.onClosedCallbacks.append(self.onClosed)
 
     def onMessage(self, message: str):
         self.session.updateMotor(self.number, message)
@@ -58,7 +62,7 @@ class EDMOSession:
     # A motor is assigned to the player
     def playerConnected(self, player: EDMOPlayer):
         self.activePlayers.append(player)
-        player.number = self.playerNumbers.pop()
+        player.assignNumber(self.playerNumbers.popleft())
         self.waitingPlayers.remove(player)
         pass
 
@@ -95,6 +99,8 @@ class EDMOSession:
     async def update(self):
         if not self.protocol.hasValue():
             return
+
+        motor = self.motors[0]
 
         for motor in self.motors:
             command = motor.asCommand()

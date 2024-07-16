@@ -1,12 +1,8 @@
 import asyncio
 from aiohttp import web
-import aiohttp
-import aiohttp.client_exceptions
-import aiohttp.web_exceptions
 
-from EDMOSerial import EDMOSerial, SerialProtocol
 from EDMOSession import EDMOSession
-from Utilities.Bindable import Bindable
+from FusedCommunication import FusedCommunication, FusedCommunicationProtocol
 from aiortc.contrib.signaling import object_from_string, object_to_string
 
 from aiortc import (
@@ -20,27 +16,25 @@ class EDMOBackend:
     def __init__(self):
         self.candidateSessions: dict[str, EDMOSession] = {}
         self.allSessions: dict[str, EDMOSession] = {}
-        self.edmoSerial = EDMOSerial()
-        self.edmoSerial.onConnect.append(self.onEDMOConnected)
-        self.edmoSerial.onDisconnect.append(self.onEDMODisconnect)
-        pass
 
-    def onEDMOConnected(self, protocolBindable: Bindable[SerialProtocol]):
+        self.fusedCommunication = FusedCommunication()
+        self.fusedCommunication.onEdmoConnected.append(self.onEDMOConnected)
+        self.fusedCommunication.onEdmoDisconnected.append(self.onEDMODisconnect)
+
+    def onEDMOConnected(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
-        protocol = protocolBindable.getNonNullValue()
         identifier = protocol.identifier
 
         if identifier in self.allSessions:
             # Move to valid candidate session
             self.candidateSessions[identifier] = self.allSessions[identifier]
         else:
-            newSession = EDMOSession(protocolBindable, 4)
+            newSession = EDMOSession(protocol, 4)
             self.allSessions[identifier] = newSession
             self.candidateSessions[identifier] = newSession
 
-    def onEDMODisconnect(self, protocolBindable: Bindable[SerialProtocol]):
+    def onEDMODisconnect(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
-        protocol = protocolBindable.getNonNullValue()
         identifier = protocol.identifier
 
         # Remove session from candidates
@@ -52,7 +46,7 @@ class EDMOBackend:
         #  and we want to allow a seamless recovery for existing users
 
     async def onShutdown(self):
-        self.edmoSerial.close()
+        self.fusedCommunication.close()
         pass
 
     async def onPlayerConnect(self, request: web.Request):
@@ -100,7 +94,7 @@ class EDMOBackend:
 
     async def update(self):
         # Update the serial stuff
-        serialUpdateTask = asyncio.create_task(self.edmoSerial.update())
+        serialUpdateTask = asyncio.create_task(self.fusedCommunication.update())
 
         # Update all sessions
         sessionUpdates = []
@@ -110,7 +104,7 @@ class EDMOBackend:
             sessionUpdates.append(asyncio.create_task(session.update()))
 
         # Ensure that the update cycle runs at most 10 times a second
-        minUpdateDuration = asyncio.create_task(asyncio.sleep(0.5))
+        minUpdateDuration = asyncio.create_task(asyncio.sleep(0.1))
 
         await serialUpdateTask
         if len(sessionUpdates) > 0:
@@ -130,6 +124,8 @@ class EDMOBackend:
         site = web.TCPSite(runner, "localhost", 8080)
         await site.start()
 
+        await self.fusedCommunication.initialize()
+
         closed = False
 
         try:
@@ -141,9 +137,9 @@ class EDMOBackend:
             await runner.cleanup()
 
     def createDummySession(self, identifier: str):
-        protocolBindable = Bindable[SerialProtocol]()
+        protocol = FusedCommunicationProtocol(identifier)
 
-        newSession = EDMOSession(protocolBindable, 4)
+        newSession = EDMOSession(protocol, 4)
 
         self.allSessions[identifier] = newSession
         self.candidateSessions[identifier] = newSession

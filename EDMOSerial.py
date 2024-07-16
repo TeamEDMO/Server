@@ -85,11 +85,10 @@ class SerialProtocol(asyncio.Protocol):
 
 
 class EDMOSerial:
-    connections: dict[str, Bindable[SerialProtocol]] = {}
     devices: dict[str, SerialProtocol] = {}
 
-    onConnect: list[Callable[[Bindable[SerialProtocol]], None]] = []
-    onDisconnect: list[Callable[[Bindable[SerialProtocol]], None]] = []
+    onConnect: list[Callable[[SerialProtocol], None]] = []
+    onDisconnect: list[Callable[[SerialProtocol], None]] = []
 
     def __init__(self):
         pass
@@ -138,34 +137,17 @@ class EDMOSerial:
         serialProtocol.connectionCallbacks.append(self.onConnectionEstablished)
 
     def onConnectionEstablished(self, protocol: SerialProtocol):
-        # We either already seen this identifier, or we haven't
-        # We try to reuse the bindable so sessions automatically update
-        if protocol.identifier in self.connections:
-            connectionBindable = self.connections[protocol.identifier]
-        else:
-            connectionBindable = Bindable[SerialProtocol]()
-            self.connections[protocol.identifier] = connectionBindable
-
-        connectionBindable.set(protocol)
-
         # Notify subscribers of the change
         for callback in self.onConnect:
-            callback(connectionBindable)
+            callback(protocol)
 
     def onConnectionLost(self, protocol: SerialProtocol):
         # We remove the device from the list
-
         del self.devices[protocol.device]
 
-        connectionBindable = self.connections[protocol.identifier]
-
         # Notify subscribers of the change
-        # We do this *BEFORE* setting the bindable to none
-        # This is to ensure that receivers knows which protocol is lost
         for callback in self.onDisconnect:
-            callback(connectionBindable)
-
-        connectionBindable.set(None)
+            callback(protocol)
 
     def close(self):
         devices = self.devices.copy()

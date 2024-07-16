@@ -4,8 +4,8 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 from EDMOMotor import EDMOMotor
-from EDMOSerial import SerialProtocol
-from Utilities.Bindable import Bindable
+from FusedCommunication import FusedCommunicationProtocol
+
 from Utilities.Helpers import removeIfExist
 from WebRTCPeer import WebRTCPeer
 
@@ -41,7 +41,7 @@ class EDMOPlayer:
 
 
 class EDMOSession:
-    def __init__(self, protocol: Bindable[SerialProtocol], numberPlayers: int):
+    def __init__(self, protocol: FusedCommunicationProtocol, numberPlayers: int):
         self.playerNumbers = deque(range(0, numberPlayers))
         self.protocol = protocol
         self.activePlayers = []
@@ -97,7 +97,7 @@ class EDMOSession:
     # Update the state of the actual edmo robot
     # All motors are sent through the serial protocol
     async def update(self):
-        if not self.protocol.hasValue():
+        if not self.protocol.hasConnection():
             return
 
         motor = self.motors[0]
@@ -105,4 +105,4 @@ class EDMOSession:
         for motor in self.motors:
             command = motor.asCommand()
             # print(command)
-            self.protocol.getNonNullValue().write(command)
+            self.protocol.write(command)

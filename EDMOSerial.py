@@ -1,6 +1,6 @@
 import asyncio
 from logging import info, log
-from typing import Callable, cast
+from typing import Callable, Optional, cast
 import serial
 import serial.serialutil
 import serial_asyncio
@@ -16,16 +16,18 @@ class SerialProtocol(asyncio.Protocol):
     def __init__(self):
         self.connectionCallbacks = list[Callable[[Self], None]]()
         self.disconnectCallbacks = list[Callable[[Self], None]]()
-        self.identifying = False
+        self.identifying = True
         self.receivedData = list[bytes]()
         self.identifier = ""
         self.closed = False
         self.device = ""
 
+        self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+
     def connection_made(self, transport: SerialTransport):  # type: ignore
         self.transport = transport
 
-        # Send out the identification command 
+        # Send out the identification command
         transport.write(bytes(b"ED\x00MO"))
 
         print("port opened: ", transport)
@@ -35,19 +37,15 @@ class SerialProtocol(asyncio.Protocol):
             callback(self)
 
     def data_received(self, data):
-
-        print("Serial: ", data)
-
+        print(data)
         if self.identifying:
             self.identifier = data.decode()
             self.identifying = False
             self.deviceIdentified()
-
-            # self.transport.close()
             return
 
-        # print("data received", repr(data))
-        self.receivedData.append(data)
+        if self.onMessageReceived is not None:
+            self.onMessageReceived(data)
 
     def connection_lost(self, exc):
         print("port closed")

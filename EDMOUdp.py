@@ -1,6 +1,6 @@
 from asyncio import DatagramProtocol, DatagramTransport, get_event_loop
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 
 IPAddress = tuple[str | Any, int]
@@ -12,11 +12,17 @@ class UdpProtocol:
         self.lastResponseTime: datetime = datetime.now()
         self.ip = ip
         self.transport = transport
+
+        self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+
         pass
 
     def data_received(self, data):
         print("UDP loopback: ", data)
         self.lastResponseTime = datetime.now()
+
+        if self.onMessageReceived is not None:
+            self.onMessageReceived(data)
 
     def write(self, data: bytes):
         # print("UDP send: ", data)
@@ -75,14 +81,20 @@ class EDMOUdp(DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr):
         # Received the identifier, potentially replying to a broadcast
-        print(data.decode())
+        print(data)
+
+        if not data.startswith(b"ED") or not data.endswith(b"MO"):
+            return
+
         if addr not in self.peers:
-            if data[0] == 0:
-                identifier = data[1:].decode()
+            if data[2] == 0:
+                identifier = data[3:-2].decode()
                 udpProto = UdpProtocol(identifier, addr, self.transport)
                 self.peers[addr] = udpProto
 
                 self.onConnectionEstablished(udpProto)
+
+            return
 
         self.peers[addr].data_received(data)
         pass

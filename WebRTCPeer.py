@@ -1,5 +1,5 @@
 from logging import info
-from typing import Callable, Self, cast
+from typing import Callable, cast
 from aiortc import (
     RTCPeerConnection,
     RTCSessionDescription,

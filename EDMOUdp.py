@@ -19,7 +19,7 @@ class UdpProtocol:
         self.lastResponseTime = datetime.now()
 
     def write(self, data: bytes):
-        #print("UDP send: ", data)
+        # print("UDP send: ", data)
         self.transport.sendto(data, self.ip)
 
     def isStale(self):
@@ -75,6 +75,7 @@ class EDMOUdp(DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr):
         # Received the identifier, potentially replying to a broadcast
+        print(data.decode())
         if addr not in self.peers:
             if data[0] == 0:
                 identifier = data[1:].decode()

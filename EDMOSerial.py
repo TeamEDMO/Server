@@ -25,11 +25,8 @@ class SerialProtocol(asyncio.Protocol):
     def connection_made(self, transport: SerialTransport):  # type: ignore
         self.transport = transport
 
-        self.identifying = True
-        print(b"ED\x00MO")
+        # Send out the identification command 
         transport.write(bytes(b"ED\x00MO"))
-
-        # self.identifier = self.device
 
         print("port opened: ", transport)
 
@@ -38,7 +35,9 @@ class SerialProtocol(asyncio.Protocol):
             callback(self)
 
     def data_received(self, data):
-        print("loopback: ", data)
+
+        print("Serial: ", data)
+
         if self.identifying:
             self.identifier = data.decode()
             self.identifying = False

@@ -11,6 +11,7 @@ class FusedCommunicationProtocol:
         self.serialCommunication: Optional[SerialProtocol] = None
         self.udpCommunication: Optional[UdpProtocol] = None
         self.identifier = identifier
+        
         pass
 
     def write(self, message: bytes):
@@ -41,6 +42,7 @@ class FusedCommunication:
 
         self.onEdmoConnected = list[Callable[[FusedCommunicationProtocol], None]]()
         self.onEdmoDisconnected = list[Callable[[FusedCommunicationProtocol], None]]()
+
 
     async def initialize(self):
         await self.udp.initialize()

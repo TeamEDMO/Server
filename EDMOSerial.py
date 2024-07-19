@@ -37,11 +37,16 @@ class SerialProtocol(asyncio.Protocol):
             callback(self)
 
     def data_received(self, data):
-        print(data)
+        print("Serial: ", data)
+
+        if not data.startswith(b"ED") or not data.endswith(b"MO"):
+            return
+
         if self.identifying:
-            self.identifier = data.decode()
-            self.identifying = False
-            self.deviceIdentified()
+            if data[2] == 0:
+                self.identifier = data[3:-2].decode()
+                self.identifying = False
+                self.deviceIdentified()
             return
 
         if self.onMessageReceived is not None:
@@ -119,7 +124,7 @@ class EDMOSerial:
         # SerialProtocol contains the general management code
         loop = asyncio.get_event_loop()
         _, protocol = await serial_asyncio.create_serial_connection(
-            loop, SerialProtocol, port.device, baudrate=9600
+            loop, SerialProtocol, port.device, baudrate=115200
         )
 
         # For typing purposes, no actual effect

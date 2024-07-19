@@ -54,6 +54,6 @@ class EDMOMotor:
         escapedCommand = bytes(commandBA)
 
         full = b"E" + b"D" + escapedCommand + b"M" + b"O"
-        #print(full)
+        # print(full)
 
         return full

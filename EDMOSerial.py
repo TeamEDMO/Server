@@ -1,15 +1,10 @@
 import asyncio
-from logging import info, log
 from typing import Callable, Optional, cast
-import serial
-import serial.serialutil
 import serial_asyncio
-import serial.tools.list_ports
 from serial.tools.list_ports_common import ListPortInfo
 from serial.tools.list_ports import comports
 from serial_asyncio import SerialTransport
 from typing import Self
-from Utilities.Bindable import Bindable
 
 
 class SerialProtocol(asyncio.Protocol):

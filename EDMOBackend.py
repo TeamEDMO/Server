@@ -5,9 +5,7 @@ from EDMOSession import EDMOSession
 from FusedCommunication import FusedCommunication, FusedCommunicationProtocol
 from aiortc.contrib.signaling import object_from_string, object_to_string
 
-from aiortc import (
-    RTCSessionDescription,
-)
+from aiortc import RTCSessionDescription
 
 from WebRTCPeer import WebRTCPeer
 
@@ -121,7 +119,7 @@ class EDMOBackend:
         await runner.setup()
         runner.shutdown_callback = self.onShutdown
 
-        site = web.TCPSite(runner, "localhost", 8080)
+        site = web.TCPSite(runner, port=8080)
         await site.start()
 
         await self.fusedCommunication.initialize()

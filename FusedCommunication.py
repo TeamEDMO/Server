@@ -1,9 +1,6 @@
 from asyncio import create_task
 import asyncio
 from typing import Callable, Optional
-
-from serial import protocol_handler_packages
-
 from EDMOSerial import EDMOSerial, SerialProtocol
 from EDMOUdp import EDMOUdp, UdpProtocol
 

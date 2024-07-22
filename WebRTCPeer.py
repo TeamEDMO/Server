@@ -44,7 +44,11 @@ class WebRTCPeer:
 
         self._dataChannel.send(message)
 
-    def onMessageReceived(self, message: str):
+    async def onMessageReceived(self, message: str):
+        if message == "CLOSE":
+            await self.close()
+            return
+
         print(message)
 
         for callback in self.onMessage:

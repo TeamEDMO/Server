@@ -9,11 +9,10 @@ from aiortc import RTCSessionDescription
 
 from WebRTCPeer import WebRTCPeer
 
-
 class EDMOBackend:
     def __init__(self):
-        self.candidateSessions: dict[str, EDMOSession] = {}
-        self.allSessions: dict[str, EDMOSession] = {}
+        self.activeEDMOs: dict[str, FusedCommunicationProtocol] = {}
+        self.activeSessions: dict[str, EDMOSession] = {}
 
         self.fusedCommunication = FusedCommunication()
         self.fusedCommunication.onEdmoConnected.append(self.onEDMOConnected)
@@ -22,36 +21,47 @@ class EDMOBackend:
     def onEDMOConnected(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
         identifier = protocol.identifier
-
-        if identifier in self.allSessions:
-            # Move to valid candidate session
-            self.candidateSessions[identifier] = self.allSessions[identifier]
-        else:
-            newSession = EDMOSession(protocol, 4)
-            self.allSessions[identifier] = newSession
-            self.candidateSessions[identifier] = newSession
+        self.activeEDMOs[identifier] = protocol
 
     def onEDMODisconnect(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
         identifier = protocol.identifier
 
         # Remove session from candidates
-        if identifier in self.candidateSessions:
-            del self.candidateSessions[identifier]
+        if identifier in self.activeEDMOs:
+            del self.activeEDMOs[identifier]
 
-        # We don't remove it from all sessions just yet
-        # This is because the connection may be reestablished
-        #  and we want to allow a seamless recovery for existing users
+    def getEDMOSession(self, identifier):
+        if identifier in self.activeSessions:
+            return self.activeSessions[identifier]
+
+        if identifier not in self.activeEDMOs:
+            return None
+
+        protocol = self.activeEDMOs[identifier]
+        session = self.activeSessions[identifier] = EDMOSession(
+            protocol, 4, self.removeSession
+        )
+
+        return session
+
+    def removeSession(self, session: EDMOSession):
+        identifier = session.protocol.identifier
+        if identifier in self.activeSessions:
+            del self.activeSessions[identifier]
 
     async def onShutdown(self):
         self.fusedCommunication.close()
         pass
 
     async def onPlayerConnect(self, request: web.Request):
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeEDMOs:
+            return web.Response(status=404)
+
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-
-        identifier = request.match_info["identifier"]
 
         async for msg in ws:
             print(msg)
@@ -65,18 +75,21 @@ class EDMOBackend:
 
                     await ws.send_str(object_to_string(answer))
 
-                    self.allSessions[identifier].registerPlayer(player)
+                    session = self.getEDMOSession(identifier)
+
+                    if session is not None:
+                        session.registerPlayer(player)
 
         return ws
 
     # This returns the available sessions and their capacities in a json list
-    async def getSessionInfo(self, request: web.Request):
+    async def getActiveSessions(self, request: web.Request):
         sessions = []
-        for candidateSession in self.candidateSessions:
+        for candidateSession in self.activeSessions:
             sessionInfo = {}
             sessionInfo["identifier"] = candidateSession
 
-            edmoSession = self.candidateSessions[candidateSession]
+            edmoSession = self.activeSessions[candidateSession]
 
             sessionInfo["activePlayers"] = len(edmoSession.activePlayers)
             sessionInfo["MaxPlayers"] = len(edmoSession.motors)
@@ -84,6 +97,12 @@ class EDMOBackend:
             sessions.append(sessionInfo)
 
         response = web.json_response(sessions)
+        return response
+
+    async def getActiveEDMOs(self, request: web.Request):
+        edmos = [candidate for candidate in self.activeEDMOs]
+
+        response = web.json_response(edmos)
         return response
 
     async def shutdown(self, request: web.Request):
@@ -97,8 +116,8 @@ class EDMOBackend:
         # Update all sessions
         sessionUpdates = []
 
-        for sessionID in self.candidateSessions:
-            session = self.candidateSessions[sessionID]
+        for sessionID in self.activeSessions:
+            session = self.activeSessions[sessionID]
             sessionUpdates.append(asyncio.create_task(session.update()))
 
         # Ensure that the update cycle runs at most 10 times a second
@@ -113,7 +132,8 @@ class EDMOBackend:
         app = web.Application()
         # app.on_shutdown.append(self.onShutdown)
         app.router.add_route("GET", "/controller/{identifier}", self.onPlayerConnect)
-        app.router.add_route("GET", "/sessions", self.getSessionInfo)
+        app.router.add_route("GET", "/activeSessions", self.getActiveSessions)
+        app.router.add_route("GET", "/activeEdmos", self.getActiveEDMOs)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -133,14 +153,6 @@ class EDMOBackend:
             pass
         finally:
             await runner.cleanup()
-
-    def createDummySession(self, identifier: str):
-        protocol = FusedCommunicationProtocol(identifier)
-
-        newSession = EDMOSession(protocol, 4)
-
-        self.allSessions[identifier] = newSession
-        self.candidateSessions[identifier] = newSession
 
 
 async def main():

@@ -16,6 +16,9 @@ class SerialProtocol(asyncio.Protocol):
         self.identifier = ""
         self.closed = False
         self.device = ""
+        
+        self.receivingData = False
+        self.receiveBuffer = bytearray()
 
         self.onMessageReceived: Optional[Callable[[bytes], None]] = None
 
@@ -32,11 +35,36 @@ class SerialProtocol(asyncio.Protocol):
             callback(self)
 
     def data_received(self, data):
-        print("Serial: ", data)
+        self.receiveBuffer = self.receiveBuffer
 
-        if not data.startswith(b"ED") or not data.endswith(b"MO"):
-            return
+        for i in range(0, len(data)):
+            self.receiveBuffer.append(data[i])
 
+            # Do we have a header?
+            if len(self.receiveBuffer) == 2 and self.receiveBuffer.endswith(b"ED"):
+                self.receiveBuffer = self.receiveBuffer[:2]
+                self.receivingData = True
+
+            # If we aren't actively receiving data, then we actually don't have to do anything with the data that comes in
+            if not self.receivingData:
+                # Make discard every two bytes to ensure we don't overflow the buffer
+                # (We need at least two bytes to determine if a header is received)
+                if len(self.receiveBuffer) > 2:
+                    self.receiveBuffer = bytearray()
+                continue
+
+            # As long as we haven't received the data, we will not proceed with parsing
+            if not self.receiveBuffer.endswith(b"MO"):
+                continue
+
+            # Data transmission successful at this point
+            # Relinquish control to packet handler
+            self.receivingData = False
+
+            self.handlePacket(bytes(self.receiveBuffer))
+            self.receiveBuffer = bytearray()
+
+    def handlePacket(self, data: bytes):
         if self.identifying:
             if data[2] == 0:
                 self.identifier = data[3:-2].decode()

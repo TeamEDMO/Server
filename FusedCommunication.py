@@ -12,6 +12,7 @@ class FusedCommunicationProtocol:
         self.identifier = identifier
 
         self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+        self.connected = False
 
         pass
 
@@ -34,6 +35,7 @@ class FusedCommunicationProtocol:
             raise TypeError("Only serial or UDP protocol is accepted")
 
         protocol.onMessageReceived = self.messageReceived
+        self.connected = self.hasConnection()
 
     def unbind(self, protocol: SerialProtocol | UdpProtocol):
         if protocol == self.serialCommunication:
@@ -44,6 +46,7 @@ class FusedCommunicationProtocol:
             return
 
         protocol.onMessageReceived = None
+        self.connected = self.hasConnection()
 
     def messageReceived(self, message: bytes):
         if self.onMessageReceived is not None:
@@ -98,8 +101,9 @@ class FusedCommunication:
 
     def onDisconnect(self, protocol: SerialProtocol | UdpProtocol):
         fused = self.getFusedConnectionFor(protocol.identifier)
-        fused.serialCommunication = None
 
+        fused.unbind(protocol)
+        
         if not fused.hasConnection():
             self.edmoDisconnected(fused)
 

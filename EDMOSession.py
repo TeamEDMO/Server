@@ -1,7 +1,8 @@
 # Holds 1 session to be used with 1 robot
 
 from collections import deque
-from typing import TYPE_CHECKING
+import struct
+from typing import TYPE_CHECKING, Callable, Self
 
 from EDMOMotor import EDMOMotor
 from FusedCommunication import FusedCommunicationProtocol
@@ -27,7 +28,7 @@ class EDMOPlayer:
 
     def onMessage(self, message: str):
         self.session.updateMotor(self.number, message)
-        self.session.sessionLog.write(f"Input_Player{self.number}", message)
+        self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
 
     def onConnect(self):
         self.session.playerConnected(self)
@@ -45,8 +46,14 @@ class EDMOPlayer:
 
 # flake8: noqa: F811
 class EDMOSession:
-    def __init__(self, protocol: FusedCommunicationProtocol, numberPlayers: int):
+    def __init__(
+        self,
+        protocol: FusedCommunicationProtocol,
+        numberPlayers: int,
+        sessionRemoval: Callable[[Self], None],
+    ):
         self.sessionLog = SessionLogger(protocol.identifier)
+        self.removeSelf = sessionRemoval
 
         self.playerNumbers = deque(range(0, numberPlayers))
         self.protocol = protocol
@@ -72,11 +79,15 @@ class EDMOSession:
         self.activePlayers.append(player)
         player.assignNumber(self.playerNumbers.popleft())
         self.waitingPlayers.remove(player)
+
+        self.sessionLog.write("Session", f"Player {player.number} connected.")
         pass
 
     # The player has disconnected (due to network faults)
     # A reconnection may happen so we place them into the waiting list
     def playerDisconnected(self, player: EDMOPlayer):
+        self.sessionLog.write("Session", f"Player {player.number} disconnected.")
+
         self.activePlayers.remove(player)
         self.waitingPlayers.append(player)
 
@@ -89,16 +100,26 @@ class EDMOSession:
     #  or through player intention
     # We remove all references to the player instance
     def playerLeft(self, player: EDMOPlayer):
+        self.sessionLog.write("Session", f"Player {player.number} left.")
+
         if player.number != -1:
             self.playerNumbers.append(player.number)
             player.number = -1
 
         removeIfExist(self.activePlayers, player)
         removeIfExist(self.waitingPlayers, player)
+
+
+        if not self.hasPlayers():
+            self.removeSelf(self)
+
         pass
 
     def updateMotor(self, motorNumber: int, command: str):
         self.motors[motorNumber].adjustFrom(command)
+
+    def hasPlayers(self):
+        return len(self.activePlayers) > 0 or len(self.waitingPlayers) > 0
 
     def messageReceived(self, message: bytes):
         # Ignore malformed message
@@ -119,6 +140,8 @@ class EDMOSession:
 
             unescaped.append(messageContents[i])
 
+        unescaped = bytes(unescaped)
+
         # parsing message contents
         packetInstruction = unescaped[0]
 
@@ -129,7 +152,7 @@ class EDMOSession:
             # log motor data
             pass
         elif packetInstruction == 4:
-            self.sessionLog.write("IMU", message=str(message.replace(b"\x00", b"")))
+            self.parseIMUPacket(unescaped)
             # log IMU data
             pass
         pass
@@ -151,3 +174,27 @@ class EDMOSession:
         self.protocol.write(b"ED\x04MO")
 
         await self.sessionLog.update()
+
+    async def close(self):
+        await self.sessionLog.flush()
+
+    def parseIMUPacket(self, data: bytes):
+
+        content = data[1:]
+
+        parsedContent = struct.unpack("=LBfffLBfffLBfffLBfffLBffff", content)
+
+        accelaration = f"Acceleration: {{Time: {parsedContent[0]}, Status: {parsedContent[1]}, Value: ({parsedContent[2]},{parsedContent[3]},{parsedContent[4]})}}"
+        gyroscope = f"Gyroscope: {{Time: {parsedContent[5]}, Status: {parsedContent[6]}, Value: ({parsedContent[7]},{parsedContent[8]},{parsedContent[9]})}}"
+        magnetic = f"Magnetic: {{Time: {parsedContent[10]}, Status: {parsedContent[11]}, Value: ({parsedContent[12]},{parsedContent[13]},{parsedContent[14]})}}"
+        gravity = f"Gravity: {{Time: {parsedContent[15]}, Status: {parsedContent[16]}, Value: ({parsedContent[17]},{parsedContent[18]},{parsedContent[19]})}}"
+        rotation = f"Rotation: {{Time: {parsedContent[20]}, Status: {parsedContent[21]}, Value: ({parsedContent[22]},{parsedContent[23]},{parsedContent[24]}, {parsedContent[25]})}}"
+
+        final = f"{{{accelaration},{gyroscope},{magnetic},{gravity}, {rotation}}}"
+
+
+
+        print(final)
+
+        self.sessionLog.write("IMU", final)
+        pass

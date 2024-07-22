@@ -9,7 +9,7 @@ class SessionLogger:
         self.channels = dict[str, list[str]]()
         self.sessionStartTime = datetime.now()
         self.lastFlushTime = self.sessionStartTime
-        path = self.directoryName = f"./SessionLogs/{self.name}/{self.sessionStartTime.strftime("%Y.%m.%d/%H.%M.%S")}"
+        path = self.directoryName = f"./SessionLogs/{self.sessionStartTime.strftime(f"%Y.%m.%d/{self.name}/%H.%M.%S")}"
 
         if not os.path.exists(path):
             os.makedirs(path)

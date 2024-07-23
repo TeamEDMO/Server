@@ -6,6 +6,8 @@ from serial.tools.list_ports import comports
 from serial_asyncio import SerialTransport
 from typing import Self
 
+from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
+
 
 class SerialProtocol(asyncio.Protocol):
     def __init__(self):
@@ -20,13 +22,13 @@ class SerialProtocol(asyncio.Protocol):
         self.receivingData = False
         self.receiveBuffer = bytearray()
 
-        self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+        self.onMessageReceived: Optional[Callable[[EDMOCommand], None]] = None
 
     def connection_made(self, transport: SerialTransport):  # type: ignore
         self.transport = transport
 
         # Send out the identification command
-        transport.write(bytes(b"ED\x00MO"))
+        transport.write(EDMOPacket.create(EDMOCommands.IDENTIFY))
 
         print("port opened: ", transport)
 
@@ -41,7 +43,7 @@ class SerialProtocol(asyncio.Protocol):
             self.receiveBuffer.append(data[i])
 
             # Do we have a header?
-            if len(self.receiveBuffer) == 2 and self.receiveBuffer.endswith(b"ED"):
+            if len(self.receiveBuffer) == 2 and self.receiveBuffer.endswith(EDMOPacket.HEADER):
                 self.receiveBuffer = self.receiveBuffer[:2]
                 self.receivingData = True
 
@@ -54,7 +56,7 @@ class SerialProtocol(asyncio.Protocol):
                 continue
 
             # As long as we haven't received the data, we will not proceed with parsing
-            if not self.receiveBuffer.endswith(b"MO"):
+            if not self.receiveBuffer.endswith(EDMOPacket.FOOTER):
                 continue
 
             # Data transmission successful at this point
@@ -65,15 +67,17 @@ class SerialProtocol(asyncio.Protocol):
             self.receiveBuffer = bytearray()
 
     def handlePacket(self, data: bytes):
+        command = EDMOPacket.tryParse(data)
+
         if self.identifying:
-            if data[2] == 0:
-                self.identifier = data[3:-2].decode()
+            if command.Instruction == EDMOCommands.IDENTIFY:
+                self.identifier = command.Data.decode()
                 self.identifying = False
                 self.deviceIdentified()
             return
 
         if self.onMessageReceived is not None:
-            self.onMessageReceived(data)
+            self.onMessageReceived(command)
 
     def connection_lost(self, exc):
         print("port closed")

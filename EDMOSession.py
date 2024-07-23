@@ -4,6 +4,7 @@ from collections import deque
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
+from EDMOCommands import EDMOCommand, EDMOCommands
 from EDMOMotor import EDMOMotor
 from FusedCommunication import FusedCommunicationProtocol
 
@@ -121,38 +122,17 @@ class EDMOSession:
     def hasPlayers(self):
         return len(self.activePlayers) > 0 or len(self.waitingPlayers) > 0
 
-    def messageReceived(self, message: bytes):
+    def messageReceived(self, command: EDMOCommand):
         # Ignore malformed message
-        if not message.startswith(b"ED") or not message.endswith(b"MO"):
+        if(command.Instruction == EDMOCommands.INVALID):
             return
 
-        # Remove header and footer
-        messageContents = message[2:-2]
-
-        # remove escape characters
-        unescaped = bytearray()
-
-        for i in range(len(messageContents)):
-            if messageContents[i] == b"\\":
-                i = i + 1
-                if i >= len(messageContents):
-                    return
-
-            unescaped.append(messageContents[i])
-
-        unescaped = bytes(unescaped)
-
-        # parsing message contents
-        packetInstruction = unescaped[0]
-
-        if packetInstruction == 0:
-            return
-        elif packetInstruction == 3:
-            self.sessionLog.write("Motor", str(message.replace(b"\x00", b"")))
+        if command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
+            self.sessionLog.write("Motor", str(command.Data.replace(b"\x00", b"")))
             # log motor data
             pass
-        elif packetInstruction == 4:
-            self.parseIMUPacket(unescaped)
+        elif command.Instruction == EDMOCommands.SEND_IMU_DATA:
+            self.parseIMUPacket(command.Data)
             # log IMU data
             pass
         pass
@@ -180,9 +160,7 @@ class EDMOSession:
 
     def parseIMUPacket(self, data: bytes):
 
-        content = data[1:]
-
-        parsedContent = struct.unpack("=LBfffLBfffLBfffLBfffLBffff", content)
+        parsedContent = struct.unpack("=LBfffLBfffLBfffLBfffLBffff", data)
 
         accelaration = f"Acceleration: {{Time: {parsedContent[0]}, Status: {parsedContent[1]}, Value: ({parsedContent[2]},{parsedContent[3]},{parsedContent[4]})}}"
         gyroscope = f"Gyroscope: {{Time: {parsedContent[5]}, Status: {parsedContent[6]}, Value: ({parsedContent[7]},{parsedContent[8]},{parsedContent[9]})}}"
@@ -191,8 +169,6 @@ class EDMOSession:
         rotation = f"Rotation: {{Time: {parsedContent[20]}, Status: {parsedContent[21]}, Value: ({parsedContent[22]},{parsedContent[23]},{parsedContent[24]}, {parsedContent[25]})}}"
 
         final = f"{{{accelaration},{gyroscope},{magnetic},{gravity}, {rotation}}}"
-
-
 
         print(final)
 

@@ -2,6 +2,8 @@ from asyncio import DatagramProtocol, DatagramTransport, get_event_loop
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
+
 
 IPAddress = tuple[str | Any, int]
 
@@ -13,7 +15,7 @@ class UdpProtocol:
         self.ip = ip
         self.transport = transport
 
-        self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+        self.onMessageReceived: Optional[Callable[[EDMOCommand], None]] = None
 
         pass
 
@@ -59,7 +61,9 @@ class EDMOUdp(DatagramProtocol):
     def searchForConnections(self):
         # Broadcast the id command to all peers
         # If an EDMO exist, we'll receive their identifier along with their IP
-        self.transport.sendto(b"ED\x00MO", ("255.255.255.255", 2121))
+        self.transport.sendto(
+            EDMOPacket.create(EDMOCommands.IDENTIFY), ("255.255.255.255", 2121)
+        )
 
     # We want to ensure that if an EDMO doesn't respond
     #  (Due to shutdown, network fault, or Derrick's code)
@@ -81,14 +85,11 @@ class EDMOUdp(DatagramProtocol):
 
     def datagram_received(self, data: bytes, addr):
         # Received the identifier, potentially replying to a broadcast
-        print(data)
-
-        if not data.startswith(b"ED") or not data.endswith(b"MO"):
-            return
+        command = EDMOPacket.tryParse(data)
 
         if addr not in self.peers:
-            if data[2] == 0:
-                identifier = data[3:-2].decode()
+            if command.Instruction == EDMOCommands.IDENTIFY:
+                identifier = command.Data.decode()
                 udpProto = UdpProtocol(identifier, addr, self.transport)
                 self.peers[addr] = udpProto
 

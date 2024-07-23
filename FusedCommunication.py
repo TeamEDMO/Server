@@ -1,6 +1,7 @@
 from asyncio import create_task
 import asyncio
 from typing import Callable, Optional
+from EDMOCommands import EDMOCommand
 from EDMOSerial import EDMOSerial, SerialProtocol
 from EDMOUdp import EDMOUdp, UdpProtocol
 
@@ -11,7 +12,7 @@ class FusedCommunicationProtocol:
         self.udpCommunication: Optional[UdpProtocol] = None
         self.identifier = identifier
 
-        self.onMessageReceived: Optional[Callable[[bytes], None]] = None
+        self.onMessageReceived: Optional[Callable[[EDMOCommand], None]] = None
         self.connected = False
 
         pass
@@ -48,9 +49,9 @@ class FusedCommunicationProtocol:
         protocol.onMessageReceived = None
         self.connected = self.hasConnection()
 
-    def messageReceived(self, message: bytes):
+    def messageReceived(self, command: EDMOCommand):
         if self.onMessageReceived is not None:
-            self.onMessageReceived(message)
+            self.onMessageReceived(command)
 
     def hasConnection(self):
         return self.serialCommunication is not None or self.udpCommunication is not None

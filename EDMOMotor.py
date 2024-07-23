@@ -1,5 +1,7 @@
 import struct
 
+from EDMOCommands import EDMOCommands, EDMOPacket
+
 (AMPLITUDE, OFFSET, PHASESHIFT, FREQUENCY, SERVOMIN, SERVOMAX, PRINT) = map(
     int, [0, 1, 2, 3, 4, 5, 4294967295]
 )
@@ -48,12 +50,4 @@ class EDMOMotor:
             self._phaseShift,
         )
 
-        commandBA = bytearray(b"\x01" + command)
-        commandBA = commandBA.replace(b"ED", b"E\\D")
-        commandBA = commandBA.replace(b"MO", b"M\\O")
-        escapedCommand = bytes(commandBA)
-
-        full = b"E" + b"D" + escapedCommand + b"M" + b"O"
-        # print(full)
-
-        return full
+        return EDMOPacket.create(EDMOCommands.UPDATE_OSCILLATOR, command)

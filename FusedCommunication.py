@@ -87,7 +87,7 @@ class FusedCommunication:
             return self.connections[identifier]
 
         fusedProto = FusedCommunicationProtocol(identifier)
-        self.connections[identifier] = FusedCommunicationProtocol(identifier)
+        self.connections[identifier] = fusedProto
         return fusedProto
 
     def onConnect(self, protocol: SerialProtocol | UdpProtocol):
@@ -104,7 +104,7 @@ class FusedCommunication:
         fused = self.getFusedConnectionFor(protocol.identifier)
 
         fused.unbind(protocol)
-        
+
         if not fused.hasConnection():
             self.edmoDisconnected(fused)
 

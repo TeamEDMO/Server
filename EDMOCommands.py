@@ -2,15 +2,20 @@ from attr import dataclass
 
 
 class EDMOCommands:
-    IDENTIFY, SESSION_START, UPDATE_OSCILLATOR, SEND_MOTOR_DATA, SEND_IMU_DATA = range(
-        5
-    )
+    (
+        IDENTIFY,
+        SESSION_START,
+        GET_TIME,
+        UPDATE_OSCILLATOR,
+        SEND_MOTOR_DATA,
+        SEND_IMU_DATA,
+    ) = range(6)
 
     INVALID = -1
 
     @classmethod
     def sanitize(cls, instruction: int):
-        if instruction not in range(5):
+        if instruction not in range(6):
             return cls.INVALID
 
         return instruction
@@ -55,6 +60,7 @@ class EDMOPacket:
             return EDMOCommand(EDMOCommands.INVALID, None)  # type:ignore
 
         command = packet[2:-2]
+
         instruction = EDMOCommands.sanitize(command[0])
         data = cls.unescape(command[1:])
 
@@ -62,17 +68,24 @@ class EDMOPacket:
 
     @classmethod
     def escape(cls, data: bytearray):
-        return data.replace(cls.HEADER, b"E\\D").replace(cls.FOOTER, b"M\\O")
+        return (
+            data.replace(b"\\", b"\\\\")
+            .replace(cls.HEADER, b"E\\D")
+            .replace(cls.FOOTER, b"M\\O")
+        )
 
     @classmethod
     def unescape(cls, data: bytes):
         unescaped = bytearray()
-        for i in range(len(data)):
-            if data[i] == b"\\":
-                i = i + 1
+
+        i = 0
+        while i < len(data):
+            if data[i] == int.from_bytes(b"\\"):
+                i += 1
                 if i >= len(data):
                     break
 
             unescaped.append(data[i])
+            i += 1
 
         return unescaped

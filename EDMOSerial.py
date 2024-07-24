@@ -41,7 +41,7 @@ class SerialProtocol(asyncio.Protocol):
             self.receiveBuffer.append(data[i])
 
             # Do we have a header?
-            if len(self.receiveBuffer) == 2 and self.receiveBuffer.endswith(EDMOPacket.HEADER):
+            if len(self.receiveBuffer) >= 2 and self.receiveBuffer.endswith(EDMOPacket.HEADER):
                 self.receiveBuffer = self.receiveBuffer[:2]
                 self.receivingData = True
 
@@ -49,7 +49,7 @@ class SerialProtocol(asyncio.Protocol):
             if not self.receivingData:
                 # Make discard every two bytes to ensure we don't overflow the buffer
                 # (We need at least two bytes to determine if a header is received)
-                if len(self.receiveBuffer) > 2:
+                if len(self.receiveBuffer) >= 2:
                     self.receiveBuffer = bytearray()
                 continue
 

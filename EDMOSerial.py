@@ -37,8 +37,6 @@ class SerialProtocol(asyncio.Protocol):
             callback(self)
 
     def data_received(self, data):
-        self.receiveBuffer = self.receiveBuffer
-
         for i in range(0, len(data)):
             self.receiveBuffer.append(data[i])
 
@@ -97,10 +95,12 @@ class SerialProtocol(asyncio.Protocol):
         print("resume writing")
 
     def pause_reading(self):
+        print("Reading paused")
         self.transport.pause_reading()
 
     def resume_reading(self):
         self.transport.resume_reading()
+        print("reading resumed")
 
     def write(self, data: bytes):
         if self.closed:

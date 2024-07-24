@@ -13,6 +13,8 @@ class FusedCommunicationProtocol:
         self.identifier = identifier
 
         self.onMessageReceived: Optional[Callable[[EDMOCommand], None]] = None
+        self.onConnectionEstablished: Optional[Callable[[], None]] = None
+
         self.connected = False
 
         pass
@@ -28,6 +30,8 @@ class FusedCommunicationProtocol:
             return
 
     def bind(self, protocol: SerialProtocol | UdpProtocol):
+        hasPreviousConnection = self.hasConnection()
+
         if isinstance(protocol, SerialProtocol):
             self.serialCommunication = protocol
         elif isinstance(protocol, UdpProtocol):
@@ -37,6 +41,10 @@ class FusedCommunicationProtocol:
 
         protocol.onMessageReceived = self.messageReceived
         self.connected = self.hasConnection()
+
+        if not hasPreviousConnection and self.connected:
+            if self.onConnectionEstablished is not None:
+                self.onConnectionEstablished()
 
     def unbind(self, protocol: SerialProtocol | UdpProtocol):
         if protocol == self.serialCommunication:

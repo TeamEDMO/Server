@@ -42,7 +42,7 @@ class EDMOMotor:
 
     def asCommand(self):
         command = struct.pack(
-            "@Iffff",
+            "<Iffff",
             self._id,
             self._freq,
             self._amp,

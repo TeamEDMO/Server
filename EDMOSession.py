@@ -4,7 +4,7 @@ from collections import deque
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
-from EDMOCommands import EDMOCommand, EDMOCommands
+from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
 from EDMOMotor import EDMOMotor
 from FusedCommunication import FusedCommunicationProtocol
 
@@ -63,6 +63,11 @@ class EDMOSession:
         self.activePlayers = []
         self.waitingPlayers = []
 
+        self.offsetTime = 0
+
+        protocol.onConnectionEstablished = self.onEDMOReconnect
+        self.onEDMOReconnect()
+
         # These motors represent the canonical state of the edmo robot
         self.motors = [EDMOMotor(i) for i in range(numberPlayers)]
         pass
@@ -110,11 +115,18 @@ class EDMOSession:
         removeIfExist(self.activePlayers, player)
         removeIfExist(self.waitingPlayers, player)
 
-
         if not self.hasPlayers():
+            self.protocol.onConnectionEstablished = None
             self.removeSelf(self)
 
         pass
+
+    def onEDMOReconnect(self):
+        self.protocol.write(
+            EDMOPacket.create(
+                EDMOCommands.SESSION_START, struct.pack("<L", self.offsetTime)
+            )
+        )
 
     def updateMotor(self, motorNumber: int, command: str):
         self.motors[motorNumber].adjustFrom(command)
@@ -124,10 +136,12 @@ class EDMOSession:
 
     def messageReceived(self, command: EDMOCommand):
         # Ignore malformed message
-        if(command.Instruction == EDMOCommands.INVALID):
+        if command.Instruction == EDMOCommands.INVALID:
             return
 
-        if command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
+        if command.Instruction == EDMOCommands.GET_TIME:
+            self.offsetTime = struct.unpack("<L", command.Data)[0]
+        elif command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
             self.sessionLog.write("Motor", str(command.Data.replace(b"\x00", b"")))
             # log motor data
             pass
@@ -150,9 +164,9 @@ class EDMOSession:
             # print(command)
             self.protocol.write(command)
 
-        self.protocol.write(b"ED\x03MO")
-        self.protocol.write(b"ED\x04MO")
-
+        self.protocol.write(EDMOPacket.create(EDMOCommands.SEND_MOTOR_DATA))
+        self.protocol.write(EDMOPacket.create(EDMOCommands.SEND_IMU_DATA))
+        self.protocol.write(EDMOPacket.create(EDMOCommands.GET_TIME))
         await self.sessionLog.update()
 
     async def close(self):
@@ -160,7 +174,7 @@ class EDMOSession:
 
     def parseIMUPacket(self, data: bytes):
 
-        parsedContent = struct.unpack("=LBfffLBfffLBfffLBfffLBffff", data)
+        parsedContent = struct.unpack("<LB3xfffLB3xfffLB3xfffLB3xfffLB3xffff", data)
 
         accelaration = f"Acceleration: {{Time: {parsedContent[0]}, Status: {parsedContent[1]}, Value: ({parsedContent[2]},{parsedContent[3]},{parsedContent[4]})}}"
         gyroscope = f"Gyroscope: {{Time: {parsedContent[5]}, Status: {parsedContent[6]}, Value: ({parsedContent[7]},{parsedContent[8]},{parsedContent[9]})}}"

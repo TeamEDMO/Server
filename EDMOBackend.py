@@ -1,6 +1,7 @@
 import asyncio
 from aiohttp import web
-
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_middlewares import cors_middleware  # type: ignore
 from EDMOSession import EDMOSession
 from FusedCommunication import FusedCommunication, FusedCommunicationProtocol
 from aiortc.contrib.signaling import object_from_string, object_to_string
@@ -8,6 +9,7 @@ from aiortc.contrib.signaling import object_from_string, object_to_string
 from aiortc import RTCSessionDescription
 
 from WebRTCPeer import WebRTCPeer
+
 
 class EDMOBackend:
     def __init__(self):
@@ -82,27 +84,10 @@ class EDMOBackend:
 
         return ws
 
-    # This returns the available sessions and their capacities in a json list
-    async def getActiveSessions(self, request: web.Request):
-        sessions = []
-        for candidateSession in self.activeSessions:
-            sessionInfo = {}
-            sessionInfo["identifier"] = candidateSession
-
-            edmoSession = self.activeSessions[candidateSession]
-
-            sessionInfo["activePlayers"] = len(edmoSession.activePlayers)
-            sessionInfo["MaxPlayers"] = len(edmoSession.motors)
-
-            sessions.append(sessionInfo)
-
-        response = web.json_response(sessions)
-        return response
-
     async def getActiveEDMOs(self, request: web.Request):
         edmos = [candidate for candidate in self.activeEDMOs]
 
-        response = web.json_response(edmos)
+        response = web.json_response(edmos, headers=self.CORS_HEADERS)
         return response
 
     async def shutdown(self, request: web.Request):
@@ -128,12 +113,52 @@ class EDMOBackend:
             await asyncio.wait(sessionUpdates)
         await minUpdateDuration
 
+    # This returns the available sessions and their capacities in a json list
+    async def getActiveSessions(self, request: web.Request):
+        return web.json_response(
+            [self.activeSessions[s].getSessionInfo() for s in self.activeSessions]
+        )
+
+    async def getSessionInfo(self, request: web.Request) -> web.Response:
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeSessions:
+            return web.Response(status=404)
+
+        return web.json_response(self.activeSessions[identifier].getDetailedInfo())
+
+    async def sendFeedback(self, request: web.Request) -> web.Response:
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeSessions:
+            return web.Response(status=404)
+
+        if not request.can_read_body:
+            return web.Response(status=400)
+
+        message = await request.text()
+        self.activeSessions[identifier].sendFeedback(message)
+
+        return web.Response(status=200)
+
     async def run(self) -> None:
-        app = web.Application()
+        app = web.Application(
+            middlewares=[
+                normalize_path_middleware(
+                    remove_slash=True, merge_slashes=True, append_slash=False
+                ),
+                cors_middleware(allow_all=True),
+            ]
+        )
         # app.on_shutdown.append(self.onShutdown)
+
         app.router.add_route("GET", "/controller/{identifier}", self.onPlayerConnect)
-        app.router.add_route("GET", "/activeSessions", self.getActiveSessions)
-        app.router.add_route("GET", "/activeEdmos", self.getActiveEDMOs)
+
+        app.router.add_route("GET", "/edmos", self.getActiveEDMOs)
+        app.router.add_route("GET", "/sessions", self.getActiveSessions)
+        app.router.add_route("GET", "/sessions/{identifier}", self.getSessionInfo)
+
+        app.router.add_route("PUT", "/sessions/{identifier}/feedback", self.sendFeedback)
 
         runner = web.AppRunner(app)
         await runner.setup()

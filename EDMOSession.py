@@ -21,6 +21,8 @@ class EDMOPlayer:
         self.rtc = rtcPeer
         self.session = edmoSession
         self.number = -1
+        self.name = "TEST"
+        self.voted = False
 
         rtcPeer.onMessage.append(self.onMessage)
         rtcPeer.onConnectCallbacks.append(self.onConnect)
@@ -30,6 +32,9 @@ class EDMOPlayer:
     def onMessage(self, message: str):
         self.session.updateMotor(self.number, message)
         self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
+
+    def sendMessage(self, message: str):
+        self.rtc.send(message)
 
     def onConnect(self):
         self.session.playerConnected(self)
@@ -60,8 +65,8 @@ class EDMOSession:
         self.protocol = protocol
         protocol.onMessageReceived = self.messageReceived
 
-        self.activePlayers = []
-        self.waitingPlayers = []
+        self.activePlayers: list[EDMOPlayer] = []
+        self.waitingPlayers: list[EDMOPlayer] = []
 
         self.offsetTime = 0
 
@@ -151,6 +156,12 @@ class EDMOSession:
             pass
         pass
 
+    def sendFeedback(self, message: str):
+        for p in self.activePlayers:
+            p.sendMessage(f"[FEEDBACK] {message}")
+
+        print(f"feedback {message} is sent to group {self.protocol.identifier}")
+
     # Update the state of the actual edmo robot
     # All motors are sent through the serial protocol
     async def update(self):
@@ -184,7 +195,34 @@ class EDMOSession:
 
         final = f"{{{accelaration},{gyroscope},{magnetic},{gravity}, {rotation}}}"
 
-        print(final)
-
         self.sessionLog.write("IMU", final)
         pass
+
+    def getSessionInfo(self):
+        object = {}
+
+        robotID = self.protocol.identifier
+
+        players = [p.name for p in self.activePlayers]
+
+        object["robotID"] = robotID
+        object["names"] = players
+
+        return object
+
+    def getDetailedInfo(self):
+        object = {}
+
+        players = []
+
+        for p in self.activePlayers:
+            player = {}
+            player["name"] = p.name
+            player["HelpRequested"] = p.voted
+
+            players.append(player)
+
+        object["robotID"] = self.protocol.identifier
+        object["players"] = players
+
+        return object

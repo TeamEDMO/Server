@@ -2,6 +2,7 @@
 
 from collections import deque
 import json
+from random import Random, randint
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -18,12 +19,27 @@ if TYPE_CHECKING:
 
 
 class EDMOPlayer:
+    SAMPLE_NAMES = [
+        "John",
+        "Stacy",
+        "Oistin",
+        "Alice",
+        "Bob",
+        "Charlie",
+        "Nat",
+        "Kieren",
+        "Eve",
+        "Frank",
+    ]
     def __init__(self, rtcPeer: WebRTCPeer, edmoSession: "EDMOSession"):
         self.rtc = rtcPeer
         self.session = edmoSession
         self.number = -1
-        self.name = "TEST"
+     
         self.voted = False
+
+        randomNumber = randint(0, len(self.SAMPLE_NAMES) - 1)
+        self.name = self.SAMPLE_NAMES[randomNumber]
 
         rtcPeer.onMessage.append(self.onMessage)
         rtcPeer.onConnectCallbacks.append(self.onConnect)
@@ -54,6 +70,7 @@ class EDMOPlayer:
 # flake8: noqa: F811
 class EDMOSession:
     TASK_LIST: list[str] | None = None
+
 
     @classmethod
     def loadTasks(cls) -> dict[str, bool]:
@@ -257,7 +274,7 @@ class EDMOSession:
     def setTasks(self, task: str, value: bool):
         if task not in self.tasks:
             return False
-        
+
         self.tasks[task] = value
         return True
         # Update every player

@@ -144,14 +144,6 @@ class EDMOBackend:
 
         return web.Response(status=200)
 
-    async def getTasks(self, request: web.Request) -> web.Response:
-        identifier = request.match_info["identifier"]
-
-        if identifier not in self.activeSessions:
-            return web.Response(status=404)
-
-        return web.json_response(self.activeSessions[identifier].tasks)
-
     async def setTaskState(self, request: web.Request) -> web.Response:
         identifier = request.match_info["identifier"]
 
@@ -163,11 +155,34 @@ class EDMOBackend:
 
         message = await request.json()
 
-        task: str = message.get("Task")
-        value: bool = message.get("Value")
+        title = message.get("Title")
+        value = message.get("Value")
 
-        if not self.activeSessions[identifier].setTasks(task, value):
+        if not isinstance(title, str) or not isinstance(value, bool):
             return web.Response(status=400)
+
+        if not self.activeSessions[identifier].setTasks(title, value):
+            return web.Response(status=400)
+
+        return web.Response(status=200)
+
+    async def setHelpEnabled(self, request: web.Request):
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeSessions:
+            return web.Response(status=404)
+
+        if not request.can_read_body:
+            return web.Response(status=400)
+
+        message = await request.json()
+
+        value = message.get("Value")
+
+        if not isinstance(value, bool):
+            return web.Response(status=400)
+
+        self.activeSessions[identifier].setHelpEnabled(value)
 
         return web.Response(status=200)
 
@@ -189,7 +204,10 @@ class EDMOBackend:
         app.router.add_route("GET", "/sessions", self.getActiveSessions)
         app.router.add_route("GET", "/sessions/{identifier}", self.getSessionInfo)
 
-        app.router.add_route("GET", "/sessions/{identifier}/tasks", self.getTasks)
+        app.router.add_route(
+            "PUT", "/sessions/{identifier}/helpEnabled", self.setHelpEnabled
+        )
+
         app.router.add_route("PUT", "/sessions/{identifier}/tasks", self.setTaskState)
 
         app.router.add_route(

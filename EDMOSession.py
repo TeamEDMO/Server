@@ -1,6 +1,7 @@
 # Holds 1 session to be used with 1 robot
 
 from collections import deque
+from itertools import count
 import json
 from random import Random, randint
 import struct
@@ -31,14 +32,16 @@ class EDMOPlayer:
         "Eve",
         "Frank",
     ]
+
     def __init__(self, rtcPeer: WebRTCPeer, edmoSession: "EDMOSession"):
         self.rtc = rtcPeer
         self.session = edmoSession
-        self.number = -1
-     
-        self.voted = False
-
         randomNumber = randint(0, len(self.SAMPLE_NAMES) - 1)
+
+        self.number = -1
+
+        self.voted = randomNumber % 2 == 0
+
         self.name = self.SAMPLE_NAMES[randomNumber]
 
         rtcPeer.onMessage.append(self.onMessage)
@@ -70,7 +73,6 @@ class EDMOPlayer:
 # flake8: noqa: F811
 class EDMOSession:
     TASK_LIST: list[str] | None = None
-
 
     @classmethod
     def loadTasks(cls) -> dict[str, bool]:
@@ -107,6 +109,8 @@ class EDMOSession:
         self.offsetTime = 0
 
         self.tasks = self.loadTasks()
+
+        self.helpEnabled = False
 
         protocol.onConnectionEstablished = self.onEDMOReconnect
         self.onEDMOReconnect()
@@ -252,6 +256,7 @@ class EDMOSession:
 
         object["robotID"] = robotID
         object["names"] = players
+        object["HelpNumber"] = len([p for p in self.activePlayers if p.voted])
 
         return object
 
@@ -269,6 +274,18 @@ class EDMOSession:
         object["robotID"] = self.protocol.identifier
         object["players"] = players
 
+        tasks = []
+
+        for t in self.tasks:
+            task = {}
+            task["Title"] = t
+            task["Value"] = self.tasks[t]
+
+            tasks.append(task)
+
+        object["tasks"] = tasks
+        object["helpEnabled"] = self.helpEnabled
+
         return object
 
     def setTasks(self, task: str, value: bool):
@@ -276,5 +293,18 @@ class EDMOSession:
             return False
 
         self.tasks[task] = value
+
+        # NOTIFY PLAYERS
+
         return True
-        # Update every player
+
+    def setHelpEnabled(self, value):
+        if self.helpEnabled == value:
+            return
+
+        self.helpEnabled = value
+        if not value:
+            for p in self.activePlayers:
+                p.voted = False
+
+        # TODO: NOTIFY PLAYERS

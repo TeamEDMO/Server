@@ -90,7 +90,7 @@ class EDMOBackend:
     async def getActiveEDMOs(self, request: web.Request):
         edmos = [candidate for candidate in self.activeEDMOs]
 
-        response = web.json_response(edmos, headers=self.CORS_HEADERS)
+        response = web.json_response(edmos)
         return response
 
     async def shutdown(self, request: web.Request):

@@ -287,6 +287,7 @@ class EDMOSession:
         object["helpEnabled"] = self.helpEnabled
 
         return object
+    
 
     def setTasks(self, task: str, value: bool):
         if task not in self.tasks:
@@ -294,7 +295,7 @@ class EDMOSession:
 
         self.tasks[task] = value
 
-        # NOTIFY PLAYERS
+        # TODO: NOTIFY PLAYERS
 
         return True
 
@@ -307,4 +308,9 @@ class EDMOSession:
             for p in self.activePlayers:
                 p.voted = False
 
-        # TODO: NOTIFY PLAYERS
+        for p in self.activePlayers:
+            p.sendMessage(f"HelpEnabled {"1" if value else "0"}")
+
+    def setSimpleView(self, value):
+        for p in self.activePlayers:
+            p.sendMessage(f"SimpleMode {"1" if value else "0"}")

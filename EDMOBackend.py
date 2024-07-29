@@ -20,6 +20,8 @@ class EDMOBackend:
         self.fusedCommunication.onEdmoConnected.append(self.onEDMOConnected)
         self.fusedCommunication.onEdmoDisconnected.append(self.onEDMODisconnect)
 
+        self.simpleViewEnabled = False
+
     def onEDMOConnected(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
         identifier = protocol.identifier
@@ -186,6 +188,29 @@ class EDMOBackend:
 
         return web.Response(status=200)
 
+    async def getSimpleView(self, request: web.Request):
+        obj = {}
+        obj["Value"] = self.simpleViewEnabled
+
+        return web.json_response(obj)
+
+    async def setSimpleView(self, request: web.Request):
+        if not request.can_read_body:
+            return web.Response(status=400)
+
+        message = await request.json()
+        value = message.get("Value")
+
+        if not isinstance(value, bool):
+            return web.Response(status=400)
+        
+        self.simpleViewEnabled = value
+
+        for s in self.activeSessions:
+            self.activeSessions[s].setSimpleView(value)
+
+        return web.Response(status=200)
+
     async def run(self) -> None:
         app = web.Application(
             middlewares=[
@@ -203,6 +228,9 @@ class EDMOBackend:
         app.router.add_route("GET", "/edmos", self.getActiveEDMOs)
         app.router.add_route("GET", "/sessions", self.getActiveSessions)
         app.router.add_route("GET", "/sessions/{identifier}", self.getSessionInfo)
+
+        app.router.add_route("PUT", "/simpleView", self.setSimpleView)
+        app.router.add_route("GET", "/simpleView", self.getSimpleView)
 
         app.router.add_route(
             "PUT", "/sessions/{identifier}/helpEnabled", self.setHelpEnabled

@@ -1,6 +1,7 @@
 # Holds 1 session to be used with 1 robot
 
 from collections import deque
+import json
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -52,6 +53,24 @@ class EDMOPlayer:
 
 # flake8: noqa: F811
 class EDMOSession:
+    TASK_LIST: list[str] | None = None
+
+    @classmethod
+    def loadTasks(cls) -> dict[str, bool]:
+        if not cls.TASK_LIST:
+            with open("tasks.json") as f:
+                cls.TASK_LIST = json.load(f)
+
+        if not cls.TASK_LIST:
+            return {}
+
+        result: dict[str, bool] = {}
+
+        for task in cls.TASK_LIST:
+            result[task] = False
+
+        return result
+
     def __init__(
         self,
         protocol: FusedCommunicationProtocol,
@@ -69,6 +88,8 @@ class EDMOSession:
         self.waitingPlayers: list[EDMOPlayer] = []
 
         self.offsetTime = 0
+
+        self.tasks = self.loadTasks()
 
         protocol.onConnectionEstablished = self.onEDMOReconnect
         self.onEDMOReconnect()
@@ -161,6 +182,7 @@ class EDMOSession:
             p.sendMessage(f"[FEEDBACK] {message}")
 
         print(f"feedback {message} is sent to group {self.protocol.identifier}")
+        self.sessionLog.write("Session", f"Teacher sent feedback: {message}")
 
     # Update the state of the actual edmo robot
     # All motors are sent through the serial protocol
@@ -182,6 +204,12 @@ class EDMOSession:
 
     async def close(self):
         await self.sessionLog.flush()
+
+        for p in self.activePlayers:
+            await p.rtc.close()
+
+        for p in self.waitingPlayers:
+            await p.rtc.close()
 
     def parseIMUPacket(self, data: bytes):
 
@@ -212,7 +240,6 @@ class EDMOSession:
 
     def getDetailedInfo(self):
         object = {}
-
         players = []
 
         for p in self.activePlayers:
@@ -226,3 +253,11 @@ class EDMOSession:
         object["players"] = players
 
         return object
+
+    def setTasks(self, task: str, value: bool):
+        if task not in self.tasks:
+            return False
+        
+        self.tasks[task] = value
+        return True
+        # Update every player

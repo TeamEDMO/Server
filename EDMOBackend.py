@@ -54,6 +54,9 @@ class EDMOBackend:
 
     async def onShutdown(self):
         self.fusedCommunication.close()
+        for s in [sess for sess in self.activeSessions]:
+            session = self.activeSessions[s]
+            await session.close()
         pass
 
     async def onPlayerConnect(self, request: web.Request):
@@ -141,6 +144,33 @@ class EDMOBackend:
 
         return web.Response(status=200)
 
+    async def getTasks(self, request: web.Request) -> web.Response:
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeSessions:
+            return web.Response(status=404)
+
+        return web.json_response(self.activeSessions[identifier].tasks)
+
+    async def setTaskState(self, request: web.Request) -> web.Response:
+        identifier = request.match_info["identifier"]
+
+        if identifier not in self.activeSessions:
+            return web.Response(status=404)
+
+        if not request.can_read_body:
+            return web.Response(status=400)
+
+        message = await request.json()
+
+        task: str = message.get("Task")
+        value: bool = message.get("Value")
+
+        if not self.activeSessions[identifier].setTasks(task, value):
+            return web.Response(status=400)
+
+        return web.Response(status=200)
+
     async def run(self) -> None:
         app = web.Application(
             middlewares=[
@@ -148,7 +178,8 @@ class EDMOBackend:
                     remove_slash=True, merge_slashes=True, append_slash=False
                 ),
                 cors_middleware(allow_all=True),
-            ]
+            ],
+            debug=True,
         )
         # app.on_shutdown.append(self.onShutdown)
 
@@ -158,7 +189,12 @@ class EDMOBackend:
         app.router.add_route("GET", "/sessions", self.getActiveSessions)
         app.router.add_route("GET", "/sessions/{identifier}", self.getSessionInfo)
 
-        app.router.add_route("PUT", "/sessions/{identifier}/feedback", self.sendFeedback)
+        app.router.add_route("GET", "/sessions/{identifier}/tasks", self.getTasks)
+        app.router.add_route("PUT", "/sessions/{identifier}/tasks", self.setTaskState)
+
+        app.router.add_route(
+            "PUT", "/sessions/{identifier}/feedback", self.sendFeedback
+        )
 
         runner = web.AppRunner(app)
         await runner.setup()

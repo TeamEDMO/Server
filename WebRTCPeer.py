@@ -105,10 +105,8 @@ class WebRTCPeer:
 
         if self._dataChannel is not None:
             self._dataChannel.close()
-            info("DataChannel is closed")
 
         await self._pc.close()
-        info("Peer connection is closed")
 
     def onClosed(self):
         if self.closed:

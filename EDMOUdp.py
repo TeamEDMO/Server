@@ -20,11 +20,11 @@ class UdpProtocol:
         pass
 
     def data_received(self, data):
-        print("UDP loopback: ", data)
+        # print("UDP loopback: ", data)
         self.lastResponseTime = datetime.now()
 
         if self.onMessageReceived is not None:
-            self.onMessageReceived(data)
+            self.onMessageReceived(EDMOPacket.tryParse(data))
 
     def write(self, data: bytes):
         # print("UDP send: ", data)

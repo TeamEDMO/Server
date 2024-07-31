@@ -218,8 +218,7 @@ class EDMOBackend:
                     remove_slash=True, merge_slashes=True, append_slash=False
                 ),
                 cors_middleware(allow_all=True),
-            ],
-            debug=True,
+            ]
         )
         # app.on_shutdown.append(self.onShutdown)
 
@@ -268,4 +267,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main(), debug=True)
+    asyncio.run(main())

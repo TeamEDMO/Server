@@ -1,12 +1,14 @@
-import asyncio
+# Nuitka compile options
+# nuitka-project: --standalone
+# nuitka-project: --include-data-files={MAIN_DIRECTORY}/**/*.json=main.dist/
 
-import EDMOSerial
+import asyncio
+from EDMOBackend import EDMOBackend
 
 
 async def main():
-    serial = EDMOSerial.EDMOSerial()
-    while True:
-        await serial.update()
+    server = EDMOBackend()
+    await server.run()
 
 
 if __name__ == "__main__":

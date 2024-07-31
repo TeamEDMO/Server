@@ -189,7 +189,7 @@ class EDMOSession:
         if command.Instruction == EDMOCommands.GET_TIME:
             self.offsetTime = struct.unpack("<L", command.Data)[0]
         elif command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
-            self.sessionLog.write("Motor", str(command.Data.replace(b"\x00", b"")))
+            self.parseMotorPacket(command.Data)
             # log motor data
             pass
         elif command.Instruction == EDMOCommands.SEND_IMU_DATA:
@@ -231,6 +231,15 @@ class EDMOSession:
 
         for p in self.waitingPlayers:
             await p.rtc.close()
+
+
+    def parseMotorPacket(self, data:bytes):
+        parsedContent = struct.unpack("<Bfffff", data)
+
+        stringified = f"Frequency: {parsedContent[1]}, Amplitude: {parsedContent[2]}, Offset: {parsedContent[3]}, Phase Shift: {parsedContent[4]}, Phase: {parsedContent[5]}"
+
+        self.sessionLog.write(f"Motor{parsedContent[0]}", stringified)
+
 
     def parseIMUPacket(self, data: bytes):
 

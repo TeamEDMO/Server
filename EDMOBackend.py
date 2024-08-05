@@ -71,21 +71,25 @@ class EDMOBackend:
         await ws.prepare(request)
 
         async for msg in ws:
-            print(msg)
-            if msg.type == web.WSMsgType.TEXT:
-                data = object_from_string(msg.data)
-                # we are only looking for one thing from the websocket
-                if isinstance(data, RTCSessionDescription):
-                    player = WebRTCPeer(request.remote)
+            if msg.type != web.WSMsgType.TEXT:
+                continue
 
-                    answer = await player.initiateConnection(data)
+            data = msg.json()
 
-                    await ws.send_str(object_to_string(answer))
+            username = data["playerName"]
+            sessionDescription = object_from_string(data["handshake"])
 
-                    session = self.getEDMOSession(identifier)
+            if isinstance(sessionDescription, RTCSessionDescription):
+                player = WebRTCPeer(request.remote)
 
-                    if session is not None:
-                        session.registerPlayer(player)
+                answer = await player.initiateConnection(sessionDescription)
+
+                await ws.send_str(object_to_string(answer))
+
+                session = self.getEDMOSession(identifier)
+
+                if session is not None:
+                    session.registerPlayer(player, username)
 
         return ws
 
@@ -203,7 +207,7 @@ class EDMOBackend:
 
         if not isinstance(value, bool):
             return web.Response(status=400)
-        
+
         self.simpleViewEnabled = value
 
         for s in self.activeSessions:

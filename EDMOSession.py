@@ -33,7 +33,7 @@ class EDMOPlayer:
         "Frank",
     ]
 
-    def __init__(self, rtcPeer: WebRTCPeer, edmoSession: "EDMOSession"):
+    def __init__(self, rtcPeer: WebRTCPeer, name: str,  edmoSession: "EDMOSession"):
         self.rtc = rtcPeer
         self.session = edmoSession
         randomNumber = randint(0, len(self.SAMPLE_NAMES) - 1)
@@ -42,7 +42,7 @@ class EDMOPlayer:
 
         self.voted = randomNumber % 2 == 0
 
-        self.name = self.SAMPLE_NAMES[randomNumber]
+        self.name = name
 
         rtcPeer.onMessage.append(self.onMessage)
         rtcPeer.onConnectCallbacks.append(self.onConnect)
@@ -121,8 +121,8 @@ class EDMOSession:
 
     # Registered players are not officially active yet
     # A registered player only becomes active when the connection is established
-    def registerPlayer(self, rtcPeer: WebRTCPeer):
-        player = EDMOPlayer(rtcPeer, self)
+    def registerPlayer(self, rtcPeer: WebRTCPeer, username: str):
+        player = EDMOPlayer(rtcPeer, username, self)
         self.waitingPlayers.append(player)
         pass
 
@@ -133,13 +133,13 @@ class EDMOSession:
         player.assignNumber(self.playerNumbers.popleft())
         self.waitingPlayers.remove(player)
 
-        self.sessionLog.write("Session", f"Player {player.number} connected.")
+        self.sessionLog.write("Session", f"Player {player.number} connected. ({player.name})")
         pass
 
     # The player has disconnected (due to network faults)
     # A reconnection may happen so we place them into the waiting list
     def playerDisconnected(self, player: EDMOPlayer):
-        self.sessionLog.write("Session", f"Player {player.number} disconnected.")
+        self.sessionLog.write("Session", f"Player {player.number} disconnected. ({player.name})")
 
         self.activePlayers.remove(player)
         self.waitingPlayers.append(player)

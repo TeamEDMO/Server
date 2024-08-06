@@ -25,7 +25,7 @@ class SessionLogger:
         pass
 
     async def flush(self):
-        for channel in self.channels:
+        for channel in list(self.channels.keys()):
             channelContent = self.channels[channel]
 
             if len(channelContent) == 0:

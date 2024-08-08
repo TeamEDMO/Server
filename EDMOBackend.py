@@ -82,14 +82,15 @@ class EDMOBackend:
             if isinstance(sessionDescription, RTCSessionDescription):
                 player = WebRTCPeer(request.remote)
 
-                answer = await player.initiateConnection(sessionDescription)
-
-                await ws.send_str(object_to_string(answer))
-
                 session = self.getEDMOSession(identifier)
 
                 if session is not None:
-                    session.registerPlayer(player, username)
+                    if not session.registerPlayer(player, username):
+                        return web.Response(status=401)
+
+                answer = await player.initiateConnection(sessionDescription)
+
+                await ws.send_str(object_to_string(answer))
 
         return ws
 
@@ -271,4 +272,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(), debug=True)

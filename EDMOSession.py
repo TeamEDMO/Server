@@ -1,6 +1,10 @@
 # Holds 1 session to be used with 1 robot
 
+from asyncio import tasks
 from collections import deque
+
+from heapq import heapify
+import heapq
 from itertools import count
 import json
 from random import Random, randint
@@ -20,23 +24,10 @@ if TYPE_CHECKING:
 
 
 class EDMOPlayer:
-    SAMPLE_NAMES = [
-        "John",
-        "Stacy",
-        "Oistin",
-        "Alice",
-        "Bob",
-        "Charlie",
-        "Nat",
-        "Kieren",
-        "Eve",
-        "Frank",
-    ]
-
     def __init__(self, rtcPeer: WebRTCPeer, name: str,  edmoSession: "EDMOSession"):
         self.rtc = rtcPeer
         self.session = edmoSession
-        randomNumber = randint(0, len(self.SAMPLE_NAMES) - 1)
+        randomNumber = randint(0,1)
 
         self.number = -1
 
@@ -68,11 +59,26 @@ class EDMOPlayer:
     def assignNumber(self, number: int):
         self.rtc.send(f"sys.number {number}")
         self.number = number
+        self.sendMessage(f"ID {self.number}")
+
+    def dict(self):
+        dict = {}
+
+        dict["number"] = self.number
+        dict["name"] = self.name
+        dict["voted"] = self.voted
+
+        return dict
+
+
+    def json(self):
+        return json.dumps(self.dict())
 
 
 # flake8: noqa: F811
 class EDMOSession:
     TASK_LIST: list[str] | None = None
+    MAX_PLAYER_COUNT = 4
 
     @classmethod
     def loadTasks(cls) -> dict[str, bool]:
@@ -99,7 +105,10 @@ class EDMOSession:
         self.sessionLog = SessionLogger(protocol.identifier)
         self.removeSelf = sessionRemoval
 
-        self.playerNumbers = deque(range(0, numberPlayers))
+        self.usedNumbers = 0
+
+        self.playerNumbers = list(range(0, self.MAX_PLAYER_COUNT))
+        heapify(self.playerNumbers)
         self.protocol = protocol
         protocol.onMessageReceived = self.messageReceived
 
@@ -122,18 +131,26 @@ class EDMOSession:
     # Registered players are not officially active yet
     # A registered player only becomes active when the connection is established
     def registerPlayer(self, rtcPeer: WebRTCPeer, username: str):
+        if(len(self.playerNumbers) == 0):
+            return False
         player = EDMOPlayer(rtcPeer, username, self)
         self.waitingPlayers.append(player)
-        pass
+
+        return True
 
     # The player finally connected
     # A motor is assigned to the player
     def playerConnected(self, player: EDMOPlayer):
-        self.activePlayers.append(player)
-        player.assignNumber(self.playerNumbers.popleft())
+        player.assignNumber(heapq.heappop(self.playerNumbers))
         self.waitingPlayers.remove(player)
-
+        self.activePlayers.append(player)
         self.sessionLog.write("Session", f"Player {player.number} connected. ({player.name})")
+
+        self.broadcastPlayerList()
+        player.sendMessage(f"TaskInfo {json.dumps(self.getTasks())}")
+        self.sendMotorParams(player)
+        player.sendMessage(f"HelpEnabled {"1" if self.helpEnabled else "0"}")
+        
         pass
 
     # The player has disconnected (due to network faults)
@@ -144,8 +161,11 @@ class EDMOSession:
         self.activePlayers.remove(player)
         self.waitingPlayers.append(player)
 
+        self.broadcastPlayerList()
+
         if player.number != -1:
-            self.playerNumbers.append(player.number)
+            heapq.heappush(self.playerNumbers, player.number)
+            self.playerNumbers
             player.number = -1
 
     # The player connection has been closed
@@ -156,7 +176,7 @@ class EDMOSession:
         self.sessionLog.write("Session", f"Player {player.number} left.")
 
         if player.number != -1:
-            self.playerNumbers.append(player.number)
+            heapq.heappush(self.playerNumbers,  player.number)
             player.number = -1
 
         removeIfExist(self.activePlayers, player)
@@ -198,9 +218,34 @@ class EDMOSession:
             pass
         pass
 
+    def broadcastTaskList(self):
+        jsonDump = json.dumps(self.getTasks())
+
+        for player in self.activePlayers:
+            player.sendMessage(f"TaskInfo {jsonDump}")
+
+    def broadcastPlayerList(self):
+        playerList = [s.dict() for s in self.activePlayers]
+
+        jsonDump = json.dumps(playerList)
+
+        for player in self.activePlayers:
+            player.sendMessage(f"PlayerInfo {jsonDump}")
+
+    def broadcastHelpEnabled(self):
+        for p in self.activePlayers:
+            p.sendMessage(f"HelpEnabled {"1" if self.helpEnabled else "0"}")
+
+    def sendMotorParams(self, recipient: EDMOPlayer):
+        motor = self.motors[recipient.number]
+        recipient.sendMessage(f"amp {motor._amp}")
+        recipient.sendMessage(f"freq {motor._freq}")
+        recipient.sendMessage(f"off {motor._offset}")
+        recipient.sendMessage(f"phb {motor._phaseShift}")
+
     def sendFeedback(self, message: str):
         for p in self.activePlayers:
-            p.sendMessage(f"[FEEDBACK] {message}")
+            p.sendMessage(f"Feedback {message}")
 
         print(f"feedback {message} is sent to group {self.protocol.identifier}")
         self.sessionLog.write("Session", f"Teacher sent feedback: {message}")
@@ -268,6 +313,19 @@ class EDMOSession:
         object["HelpNumber"] = len([p for p in self.activePlayers if p.voted])
 
         return object
+    
+    def getTasks(self):
+        tasks = []
+
+        for t in self.tasks:
+            task = {}
+            task["Title"] = t
+            task["Value"] = self.tasks[t]
+
+            tasks.append(task)
+
+        return tasks
+
 
     def getDetailedInfo(self):
         object = {}
@@ -283,14 +341,7 @@ class EDMOSession:
         object["robotID"] = self.protocol.identifier
         object["players"] = players
 
-        tasks = []
-
-        for t in self.tasks:
-            task = {}
-            task["Title"] = t
-            task["Value"] = self.tasks[t]
-
-            tasks.append(task)
+        tasks = self.getTasks()
 
         object["tasks"] = tasks
         object["helpEnabled"] = self.helpEnabled
@@ -304,7 +355,7 @@ class EDMOSession:
 
         self.tasks[task] = value
 
-        # TODO: NOTIFY PLAYERS
+        self.broadcastTaskList()
 
         return True
 
@@ -317,8 +368,7 @@ class EDMOSession:
             for p in self.activePlayers:
                 p.voted = False
 
-        for p in self.activePlayers:
-            p.sendMessage(f"HelpEnabled {"1" if value else "0"}")
+        self.broadcastHelpEnabled()
 
     def setSimpleView(self, value):
         for p in self.activePlayers:

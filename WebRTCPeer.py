@@ -28,6 +28,7 @@ class WebRTCPeer:
 
         self.closed = False
         self.connected = False
+        self.sendBuffer = []
 
         pass
 
@@ -40,6 +41,7 @@ class WebRTCPeer:
 
     def send(self, message: str):
         if self._dataChannel is None:
+            self.sendBuffer.append(message)
             return  # Might want to buffer instead
 
         self._dataChannel.send(message)
@@ -76,6 +78,10 @@ class WebRTCPeer:
         self._dataChannel = channel
         print(f"ICE {self._identifier} data channel created")
         channel.on("message", self.onMessageReceived)
+        for s in self.sendBuffer:
+            channel.send(s)
+
+        self.sendBuffer = []
 
     async def onICECandidate(self, candidate: RTCIceCandidate):
         print(f"new ice candidate {candidate}")

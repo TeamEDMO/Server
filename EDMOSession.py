@@ -31,7 +31,7 @@ class EDMOPlayer:
 
         self.number = -1
 
-        self.voted = randomNumber % 2 == 0
+        self.voted =  False
 
         self.name = name
 
@@ -41,6 +41,12 @@ class EDMOPlayer:
         rtcPeer.onClosedCallbacks.append(self.onClosed)
 
     def onMessage(self, message: str):
+        parts = message.split(" ")
+        if(parts[0] == "vote"):
+            self.voted = (int(parts[1]) == 1)
+            self.session.broadcastPlayerList()
+            return
+
         self.session.updateMotor(self.number, message)
         self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
 

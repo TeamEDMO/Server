@@ -47,6 +47,8 @@ class EDMOBackend:
             protocol, 4, self.removeSession
         )
 
+        session.setSimpleView(self.simpleViewEnabled)
+
         return session
 
     def removeSession(self, session: EDMOSession):

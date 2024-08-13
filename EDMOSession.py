@@ -126,6 +126,7 @@ class EDMOSession:
         self.tasks = self.loadTasks()
 
         self.helpEnabled = False
+        self.simpleMode = True
 
         protocol.onConnectionEstablished = self.onEDMOReconnect
         self.onEDMOReconnect()
@@ -156,6 +157,7 @@ class EDMOSession:
         player.sendMessage(f"TaskInfo {json.dumps(self.getTasks())}")
         self.sendMotorParams(player)
         player.sendMessage(f"HelpEnabled {"1" if self.helpEnabled else "0"}")
+        player.sendMessage(f"SimpleMode {"1" if self.simpleMode else "0"}")
         
         pass
 
@@ -377,5 +379,6 @@ class EDMOSession:
         self.broadcastHelpEnabled()
 
     def setSimpleView(self, value):
+        self.simpleMode = value
         for p in self.activePlayers:
             p.sendMessage(f"SimpleMode {"1" if value else "0"}")

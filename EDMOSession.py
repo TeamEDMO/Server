@@ -1,13 +1,8 @@
 # Holds 1 session to be used with 1 robot
 
-from asyncio import tasks
-from collections import deque
-
 from heapq import heapify
 import heapq
-from itertools import count
 import json
-from random import Random, randint
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -22,12 +17,10 @@ from WebRTCPeer import WebRTCPeer
 if TYPE_CHECKING:
     from EDMOSession import EDMOSession
 
-
 class EDMOPlayer:
     def __init__(self, rtcPeer: WebRTCPeer, name: str,  edmoSession: "EDMOSession"):
         self.rtc = rtcPeer
         self.session = edmoSession
-        randomNumber = randint(0,1)
 
         self.number = -1
 
@@ -86,6 +79,7 @@ class EDMOSession:
     TASK_LIST: list[str] | None = None
     MAX_PLAYER_COUNT = 4
 
+    # A one time method to load task info from a file
     @classmethod
     def loadTasks(cls) -> dict[str, bool]:
         if not cls.TASK_LIST:
@@ -196,6 +190,8 @@ class EDMOSession:
 
         pass
 
+    # If the edmo associated with this session is reconnected
+    # We realign the edmo timestamp back with the session timestamp
     def onEDMOReconnect(self):
         self.protocol.write(
             EDMOPacket.create(
@@ -209,29 +205,15 @@ class EDMOSession:
     def hasPlayers(self):
         return len(self.activePlayers) > 0 or len(self.waitingPlayers) > 0
 
-    def messageReceived(self, command: EDMOCommand):
-        # Ignore malformed message
-        if command.Instruction == EDMOCommands.INVALID:
-            return
 
-        if command.Instruction == EDMOCommands.GET_TIME:
-            self.offsetTime = struct.unpack("<L", command.Data)[0]
-        elif command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
-            self.parseMotorPacket(command.Data)
-            # log motor data
-            pass
-        elif command.Instruction == EDMOCommands.SEND_IMU_DATA:
-            self.parseIMUPacket(command.Data)
-            # log IMU data
-            pass
-        pass
-
+    # Notify all players about changes in the task list
     def broadcastTaskList(self):
         jsonDump = json.dumps(self.getTasks())
 
         for player in self.activePlayers:
             player.sendMessage(f"TaskInfo {jsonDump}")
 
+    # Notify all players about changes in the player list
     def broadcastPlayerList(self):
         playerList = [s.dict() for s in self.activePlayers]
 
@@ -240,10 +222,12 @@ class EDMOSession:
         for player in self.activePlayers:
             player.sendMessage(f"PlayerInfo {jsonDump}")
 
+    # Notify all players that help button is enabled
     def broadcastHelpEnabled(self):
         for p in self.activePlayers:
             p.sendMessage(f"HelpEnabled {"1" if self.helpEnabled else "0"}")
 
+    # Sends the current parameter of a motor associated with a player
     def sendMotorParams(self, recipient: EDMOPlayer):
         motor = self.motors[recipient.number]
         recipient.sendMessage(f"amp {motor._amp}")
@@ -251,12 +235,6 @@ class EDMOSession:
         recipient.sendMessage(f"off {motor._offset}")
         recipient.sendMessage(f"phb {motor._phaseShift}")
 
-    def sendFeedback(self, message: str):
-        for p in self.activePlayers:
-            p.sendMessage(f"Feedback {message}")
-
-        print(f"feedback {message} is sent to group {self.protocol.identifier}")
-        self.sessionLog.write("Session", f"Teacher sent feedback: {message}")
 
     # Update the state of the actual edmo robot
     # All motors are sent through the serial protocol
@@ -285,8 +263,30 @@ class EDMOSession:
         for p in self.waitingPlayers:
             await p.rtc.close()
 
+#region EDMO COMMUNICATION 
+# Functions to handle packets delivered by the EDMO itself
+
+    def messageReceived(self, command: EDMOCommand):
+        # Ignore malformed message
+        if command.Instruction == EDMOCommands.INVALID:
+            return
+
+        if command.Instruction == EDMOCommands.GET_TIME:
+            self.offsetTime = struct.unpack("<L", command.Data)[0]
+        elif command.Instruction == EDMOCommands.SEND_MOTOR_DATA:
+            self.parseMotorPacket(command.Data)
+            # log motor data
+            pass
+        elif command.Instruction == EDMOCommands.SEND_IMU_DATA:
+            self.parseIMUPacket(command.Data)
+            # log IMU data
+            pass
+        pass
+
 
     def parseMotorPacket(self, data:bytes):
+        """We've received the motor state from the edmo, we log it."""
+
         parsedContent = struct.unpack("<Bfffff", data)
 
         stringified = f"Frequency: {parsedContent[1]}, Amplitude: {parsedContent[2]}, Offset: {parsedContent[3]}, Phase Shift: {parsedContent[4]}, Phase: {parsedContent[5]}"
@@ -295,6 +295,7 @@ class EDMOSession:
 
 
     def parseIMUPacket(self, data: bytes):
+        """We've received the IMU state from the edmo, we log it."""
 
         parsedContent = struct.unpack("<LB3xfffLB3xfffLB3xfffLB3xfffLB3xffff", data)
 
@@ -308,6 +309,10 @@ class EDMOSession:
 
         self.sessionLog.write("IMU", final)
         pass
+#endregion
+
+#region API ENDPOINT HANDLERS
+# Functions in this region are meant to be used by the backed to respond to Rest API calls
 
     def getSessionInfo(self):
         object = {}
@@ -378,7 +383,18 @@ class EDMOSession:
 
         self.broadcastHelpEnabled()
 
+    # A teacher has sent feedback/guide to this session, broadcast to all player
+    def sendFeedback(self, message: str):
+        for p in self.activePlayers:
+            p.sendMessage(f"Feedback {message}")
+
+        print(f"feedback {message} is sent to group {self.protocol.identifier}")
+        self.sessionLog.write("Session", f"Teacher sent feedback: {message}")
+
+
     def setSimpleView(self, value):
         self.simpleMode = value
         for p in self.activePlayers:
             p.sendMessage(f"SimpleMode {"1" if value else "0"}")
+
+#endregion

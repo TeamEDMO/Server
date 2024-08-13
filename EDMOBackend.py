@@ -1,3 +1,5 @@
+# Handles everything
+
 import asyncio
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -11,6 +13,7 @@ from aiortc import RTCSessionDescription
 from WebRTCPeer import WebRTCPeer
 
 
+# flake8: noqa: F811
 class EDMOBackend:
     def __init__(self):
         self.activeEDMOs: dict[str, FusedCommunicationProtocol] = {}
@@ -21,6 +24,8 @@ class EDMOBackend:
         self.fusedCommunication.onEdmoDisconnected.append(self.onEDMODisconnect)
 
         self.simpleViewEnabled = False
+
+    # region EDMO MANAGEMENT
 
     def onEDMOConnected(self, protocol: FusedCommunicationProtocol):
         # Assumption: protocol is non null
@@ -34,6 +39,10 @@ class EDMOBackend:
         # Remove session from candidates
         if identifier in self.activeEDMOs:
             del self.activeEDMOs[identifier]
+
+    # endregion
+
+    # region SESSION MANAGEMENT
 
     def getEDMOSession(self, identifier):
         if identifier in self.activeSessions:
@@ -56,14 +65,11 @@ class EDMOBackend:
         if identifier in self.activeSessions:
             del self.activeSessions[identifier]
 
-    async def onShutdown(self):
-        self.fusedCommunication.close()
-        for s in [sess for sess in self.activeSessions]:
-            session = self.activeSessions[s]
-            await session.close()
-        pass
+    # endregion
 
     async def onPlayerConnect(self, request: web.Request):
+        """Attempts to handle a connecting player. Will establish a Websocket response if valid attempt."""
+        """Otherwise it'll return 404 or 401 depending on what is wrong"""
         identifier = request.match_info["identifier"]
 
         if identifier not in self.activeEDMOs:
@@ -96,17 +102,8 @@ class EDMOBackend:
 
         return ws
 
-    async def getActiveEDMOs(self, request: web.Request):
-        edmos = [candidate for candidate in self.activeEDMOs]
-
-        response = web.json_response(edmos)
-        return response
-
-    async def shutdown(self, request: web.Request):
-        print("Shutting down gracefully...")
-        raise web.GracefulExit()
-
     async def update(self):
+        """Standard update loop to be performed at most 10 times a second"""
         # Update the serial stuff
         serialUpdateTask = asyncio.create_task(self.fusedCommunication.update())
 
@@ -124,6 +121,14 @@ class EDMOBackend:
         if len(sessionUpdates) > 0:
             await asyncio.wait(sessionUpdates)
         await minUpdateDuration
+
+    # region ENDPOINT HANDLERS
+
+    async def getActiveEDMOs(self, _: web.Request):
+        edmos = [candidate for candidate in self.activeEDMOs]
+
+        response = web.json_response(edmos)
+        return response
 
     # This returns the available sessions and their capacities in a json list
     async def getActiveSessions(self, request: web.Request):
@@ -218,6 +223,8 @@ class EDMOBackend:
 
         return web.Response(status=200)
 
+    # endregion
+
     async def run(self) -> None:
         app = web.Application(
             middlewares=[
@@ -227,7 +234,6 @@ class EDMOBackend:
                 cors_middleware(allow_all=True),
             ]
         )
-        # app.on_shutdown.append(self.onShutdown)
 
         app.router.add_route("GET", "/controller/{identifier}", self.onPlayerConnect)
 
@@ -266,6 +272,14 @@ class EDMOBackend:
             pass
         finally:
             await runner.cleanup()
+
+    async def onShutdown(self):
+        """Shuts down existing connections gracefully to prevent a minor deadlock when shutting down the server"""
+        self.fusedCommunication.close()
+        for s in [sess for sess in self.activeSessions]:
+            session = self.activeSessions[s]
+            await session.close()
+        pass
 
 
 async def main():

@@ -7,6 +7,9 @@ from EDMOUdp import EDMOUdp, UdpProtocol
 
 
 class FusedCommunicationProtocol:
+    """This class is a wrapper protocol that holds one or more communication protocols to the same EDMO, serving as a simple router"""
+    """If both serial and UDP communication protocols are established, Serial will be preferred for communication"""
+
     def __init__(self, identifier: str):
         self.serialCommunication: Optional[SerialProtocol] = None
         self.udpCommunication: Optional[UdpProtocol] = None
@@ -66,6 +69,8 @@ class FusedCommunicationProtocol:
 
 
 class FusedCommunication:
+    """This class is the central management class for all supported communication methods"""
+
     def __init__(self):
         self.connections: dict[str, FusedCommunicationProtocol] = {}
 

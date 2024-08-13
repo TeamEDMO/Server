@@ -2,10 +2,6 @@ import struct
 
 from EDMOCommands import EDMOCommands, EDMOPacket
 
-(AMPLITUDE, OFFSET, PHASESHIFT, FREQUENCY, SERVOMIN, SERVOMAX, PRINT) = map(
-    int, [0, 1, 2, 3, 4, 5, 4294967295]
-)
-
 
 class EDMOMotor:
     def __init__(self, id: int) -> None:
@@ -17,6 +13,7 @@ class EDMOMotor:
         pass
 
     def adjustFrom(self, input: str):
+        """Takes an input str, and adjusts the parameters of the associated motor"""
         splits = input.split(" ")
         command = splits[0].lower()
         value = float(splits[1])

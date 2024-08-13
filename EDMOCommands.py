@@ -33,6 +33,10 @@ class EDMOPacket:
 
     @classmethod
     def create(cls, *args: bytes | int) -> bytes:
+        """
+        Creates a command packet, escaping the data bytes in the process.
+        """
+
         output = bytearray()
         output.extend(cls.HEADER)
 
@@ -56,6 +60,10 @@ class EDMOPacket:
 
     @classmethod
     def tryParse(cls, packet: bytes):
+        """
+        Attempts to parse a command packet, checking command validity and unescaping the data in the process.
+        """
+
         if not packet.startswith(cls.HEADER) or not packet.endswith(cls.FOOTER):
             return EDMOCommand(EDMOCommands.INVALID, None)  # type:ignore
 
@@ -68,6 +76,11 @@ class EDMOPacket:
 
     @classmethod
     def escape(cls, data: bytearray):
+        """
+        This method escapes an arbitrary datastream to avoid ED and MO appearing within the stream, and being parsed as the communication header and footer
+
+        A backslash (\\) is used as the esacpe character
+        """
         return (
             data.replace(b"\\", b"\\\\")
             .replace(cls.HEADER, b"E\\D")
@@ -76,6 +89,10 @@ class EDMOPacket:
 
     @classmethod
     def unescape(cls, data: bytes):
+        """
+        This method unescapes an escaped datastream by removing backslashes used to escape the data.
+        """
+
         unescaped = bytearray()
 
         i = 0

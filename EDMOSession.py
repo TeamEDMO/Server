@@ -6,8 +6,6 @@ import json
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
-from sqlalchemy import false
-
 from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
 from EDMOMotor import EDMOMotor
 from FusedCommunication import FusedCommunicationProtocol

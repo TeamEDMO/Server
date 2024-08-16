@@ -1,7 +1,22 @@
 [
-    "Follow the trail",
-    "Take a swim in the river",
-    "Hide in the bushes",
-    "Climb the mountain",
-    "Stop the enemy from taking the base!!!"
+    {
+        "en": "Follow the trail",
+        "nl": "Volg het pad"
+    },
+    {
+        "en": "Take a swim in the river",
+        "nl": "Neem een duik in de rivier"
+    },
+    {
+        "en": "Hide in the bushes",
+        "nl": "Verstop je in de struiken"
+    },
+    {
+        "en": "Climb the mountain",
+        "nl": "Beklim de berg"
+    },
+    {
+        "en": "Stop the enemy from taking the base!!!",
+        "nl": "Voorkom dat de vijand de basis inneemt!!!"
+    }
 ]

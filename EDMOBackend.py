@@ -169,13 +169,13 @@ class EDMOBackend:
 
         message = await request.json()
 
-        title = message.get("Title")
-        value = message.get("Value")
+        key = message.get("key")
+        completed = message.get("completed")
 
-        if not isinstance(title, str) or not isinstance(value, bool):
+        if not isinstance(key, str) or not isinstance(completed, bool):
             return web.Response(status=400)
 
-        if not self.activeSessions[identifier].setTasks(title, value):
+        if not self.activeSessions[identifier].setTasks(key, completed):
             return web.Response(status=400)
 
         return web.Response(status=200)

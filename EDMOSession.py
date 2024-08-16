@@ -6,6 +6,8 @@ import json
 import struct
 from typing import TYPE_CHECKING, Callable, Self
 
+from sqlalchemy import false
+
 from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
 from EDMOMotor import EDMOMotor
 from FusedCommunication import FusedCommunicationProtocol
@@ -73,15 +75,19 @@ class EDMOPlayer:
     def json(self):
         return json.dumps(self.dict())
 
+class TaskEntry:
+    def __init__(self, strings: dict[str, str], completed: bool = False):
+        self.strings = strings
+        self.completed = completed
 
 # flake8: noqa: F811
 class EDMOSession:
-    TASK_LIST: list[str] | None = None
+    TASK_LIST: list[dict[str, str]] | None = None
     MAX_PLAYER_COUNT = 4
 
     # A one time method to load task info from a file
     @classmethod
-    def loadTasks(cls) -> dict[str, bool]:
+    def loadTasks(cls) -> dict[str, TaskEntry]:
         if not cls.TASK_LIST:
             with open("tasks.json") as f:
                 cls.TASK_LIST = json.load(f)
@@ -89,10 +95,17 @@ class EDMOSession:
         if not cls.TASK_LIST:
             return {}
 
-        result: dict[str, bool] = {}
+        result: dict[str, TaskEntry] = {}
 
         for task in cls.TASK_LIST:
-            result[task] = False
+            keys = list(task.keys())
+            if(len(keys) == 0):
+                continue
+
+            firstLocaleEntry :str = task[keys[0]]
+            taskKey = "".join([e for e in firstLocaleEntry if e.isalnum()])
+            
+            result[taskKey] = TaskEntry(task)
 
         return result
 
@@ -332,8 +345,9 @@ class EDMOSession:
 
         for t in self.tasks:
             task = {}
-            task["Title"] = t
-            task["Value"] = self.tasks[t]
+            task["key"] = t
+            task["strings"] = self.tasks[t].strings
+            task["completed"] = self.tasks[t].completed
 
             tasks.append(task)
 
@@ -362,11 +376,11 @@ class EDMOSession:
         return object
     
 
-    def setTasks(self, task: str, value: bool):
-        if task not in self.tasks:
+    def setTasks(self, taskKey: str, value: bool):
+        if taskKey not in self.tasks:
             return False
 
-        self.tasks[task] = value
+        self.tasks[taskKey].completed = value
 
         self.broadcastTaskList()
 

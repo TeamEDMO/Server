@@ -39,12 +39,15 @@ class SessionLogger:
             channelContent.clear()
 
     async def update(self):
-        deltaTime = (datetime.now() - self.sessionStartTime).total_seconds()
+        currTime  = datetime.now()
+        deltaTime = (currTime - self.lastFlushTime).total_seconds()
 
         # Let's not constantly write to file
         if deltaTime < 5:
             return
 
         await self.flush()
+
+        self.lastFlushTime = currTime
 
     pass

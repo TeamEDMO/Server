@@ -34,14 +34,18 @@ class EDMOPlayer:
         rtcPeer.onClosedCallbacks.append(self.onClosed)
 
     def onMessage(self, message: str):
+        self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
         parts = message.split(" ")
         if(parts[0] == "vote"):
             self.voted = (int(parts[1]) == 1)
             self.session.broadcastPlayerList()
             return
+    
+        if(parts[0] == "freq"):
+            self.session.setFreq(float(parts[1]))
+            return
 
         self.session.updateMotor(self.number, message)
-        self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
 
     def sendMessage(self, message: str):
         self.rtc.send(message)
@@ -245,6 +249,13 @@ class EDMOSession:
         recipient.sendMessage(f"freq {motor._freq}")
         recipient.sendMessage(f"off {motor._offset}")
         recipient.sendMessage(f"phb {motor._phaseShift}")
+
+    def setFreq(self,newValue:float):
+        for motor in self.motors:
+            motor._freq = newValue
+
+        for player in self.activePlayers:
+            player.sendMessage(f"freq {newValue}")
 
 
     # Update the state of the actual edmo robot

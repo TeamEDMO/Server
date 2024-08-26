@@ -3,7 +3,8 @@
 import asyncio
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp_middlewares import cors_middleware  # type: ignore
+from aiohttp_middlewares import cors_middleware
+from prompt_toolkit import Application  # type: ignore
 from Server.EDMOSession import EDMOSession
 from Server.FusedCommunication import FusedCommunication, FusedCommunicationProtocol
 from aiortc.contrib.signaling import object_from_string, object_to_string
@@ -256,12 +257,13 @@ class EDMOBackend:
 
         runner = web.AppRunner(app)
         await runner.setup()
-        runner.shutdown_callback = self.onShutdown
 
         site = web.TCPSite(runner, port=8080)
         await site.start()
 
         await self.fusedCommunication.initialize()
+
+        app.on_cleanup.append(self.onShutdown)
 
         closed = False
 
@@ -273,7 +275,7 @@ class EDMOBackend:
         finally:
             await runner.cleanup()
 
-    async def onShutdown(self):
+    async def onShutdown(self, app: web.Application | None = None):
         """Shuts down existing connections gracefully to prevent a minor deadlock when shutting down the server"""
         self.fusedCommunication.close()
         for s in [sess for sess in self.activeSessions]:

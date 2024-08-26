@@ -1,4 +1,3 @@
-from logging import info
 from typing import Callable, cast
 from aiortc import (
     RTCPeerConnection,

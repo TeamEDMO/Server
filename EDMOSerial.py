@@ -6,7 +6,7 @@ from serial.tools.list_ports import comports
 from serial_asyncio import SerialTransport
 from typing import Self
 
-from EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
+from Server.EDMOCommands import EDMOCommand, EDMOCommands, EDMOPacket
 
 
 class SerialProtocol(asyncio.Protocol):

@@ -4,13 +4,13 @@ import asyncio
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_middlewares import cors_middleware  # type: ignore
-from EDMOSession import EDMOSession
-from FusedCommunication import FusedCommunication, FusedCommunicationProtocol
+from Server.EDMOSession import EDMOSession
+from Server.FusedCommunication import FusedCommunication, FusedCommunicationProtocol
 from aiortc.contrib.signaling import object_from_string, object_to_string
 
 from aiortc import RTCSessionDescription
 
-from WebRTCPeer import WebRTCPeer
+from Server.WebRTCPeer import WebRTCPeer
 
 
 # flake8: noqa: F811

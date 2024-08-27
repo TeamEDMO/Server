@@ -1,6 +1,7 @@
 # Handles everything
 
 import asyncio
+from typing import AsyncIterator
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_middlewares import cors_middleware
@@ -254,6 +255,7 @@ class EDMOBackend:
         app.router.add_route(
             "PUT", "/sessions/{identifier}/feedback", self.sendFeedback
         )
+        app.cleanup_ctx.append(self.onShutdown)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -263,7 +265,6 @@ class EDMOBackend:
 
         await self.fusedCommunication.initialize()
 
-        app.on_cleanup.append(self.onShutdown)
 
         closed = False
 
@@ -276,6 +277,9 @@ class EDMOBackend:
             await runner.cleanup()
 
     async def onShutdown(self, app: web.Application | None = None):
+        yield
+
+        print("Cleaning up")
         """Shuts down existing connections gracefully to prevent a minor deadlock when shutting down the server"""
         self.fusedCommunication.close()
         for s in [sess for sess in self.activeSessions]:

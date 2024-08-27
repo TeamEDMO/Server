@@ -1,6 +1,6 @@
 import struct
 
-from Server.EDMOCommands import EDMOCommands, EDMOPacket
+from EDMOCommands import EDMOCommands, EDMOPacket
 
 
 class EDMOMotor:

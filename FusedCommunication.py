@@ -1,9 +1,9 @@
 from asyncio import create_task
 import asyncio
 from typing import Callable, Optional
-from Server.EDMOCommands import EDMOCommand
-from Server.EDMOSerial import EDMOSerial, SerialProtocol
-from Server.EDMOUdp import EDMOUdp, UdpProtocol
+from EDMOCommands import EDMOCommand
+from EDMOSerial import EDMOSerial, SerialProtocol
+from EDMOUdp import EDMOUdp, UdpProtocol
 
 
 class FusedCommunicationProtocol:

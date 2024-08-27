@@ -3,7 +3,7 @@
 # nuitka-project: --include-data-files={MAIN_DIRECTORY}/**/*.json=main.dist/
 
 import asyncio
-from Server.EDMOBackend import EDMOBackend
+from EDMOBackend import EDMOBackend
 
 
 async def main():

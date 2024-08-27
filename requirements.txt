@@ -1,7 +1,8 @@
-aiofiles==24.1.0
-aiohttp==3.10.0
-aiohttp_middlewares==2.4.0
-aiortc==1.6.0
-attr==0.3.2
-pyserial==3.5
-pyserial_asyncio==0.6
+aiofiles~=24.1.0
+aiohttp~=3.10.0
+aiohttp_middlewares~=2.4.0
+aiortc~=1.6.0
+attr~=0.3.2
+prompt_toolkit~=3.0.43
+pyserial~=3.5
+pyserial_asyncio~=0.6

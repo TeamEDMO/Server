@@ -1,7 +1,9 @@
 # Holds 1 session to be used with 1 robot
 
+import asyncio
 from heapq import heapify
 import heapq
+import itertools
 import json
 import struct
 from typing import TYPE_CHECKING, Callable, Self
@@ -31,7 +33,6 @@ class EDMOPlayer:
         rtcPeer.onMessage.append(self.onMessage)
         rtcPeer.onConnectCallbacks.append(self.onConnect)
         rtcPeer.onDisconnectCallbacks.append(self.onDisconnect)
-        rtcPeer.onClosedCallbacks.append(self.onClosed)
 
     def onMessage(self, message: str):
         self.session.sessionLog.write(f"Input_Player{self.number}", message=message)
@@ -44,20 +45,27 @@ class EDMOPlayer:
         if(parts[0] == "freq"):
             self.session.setFreq(float(parts[1]))
             return
+        
+        if(parts[0] == "phb"):
+            self.session.setPhb(self.number, float(parts[1]))
 
         self.session.updateMotor(self.number, message)
+                
+        for c in [c for c in  self.session.activeOverriders if c.number == self.number and c != self]:
+            self.session.sendMotorParams(c)
 
     def sendMessage(self, message: str):
-        self.rtc.send(message)
+        try:
+            self.rtc.send(message)
+        except (Exception):
+            asyncio.create_task(self.rtc.close())
+    
 
     def onConnect(self):
         self.session.playerConnected(self)
 
     def onDisconnect(self):
         self.session.playerDisconnected(self)
-
-    def onClosed(self):
-        self.session.playerLeft(self)
 
     def assignNumber(self, number: int):
         self.rtc.send(f"sys.number {number}")
@@ -73,9 +81,42 @@ class EDMOPlayer:
 
         return dict
 
-
     def json(self):
         return json.dumps(self.dict())
+    
+class EDMOOveridePlayer(EDMOPlayer):
+    def __init__(self, rtcPeer: WebRTCPeer, id: int,  edmoSession: "EDMOSession"):
+        super().__init__( rtcPeer, "Overrider" , edmoSession)
+        self.assignNumber(id)
+
+    def onMessage(self, message: str):
+        self.session.sessionLog.write(f"Input_Override{self.number}", message=message)
+        parts = message.split(" ")
+        if(parts[0] == "vote"):
+            self.voted = (int(parts[1]) == 1)
+            self.session.broadcastPlayerList()
+            return
+    
+        if(parts[0] == "freq"):
+            self.session.setFreq(float(parts[1]))
+            return
+        
+        if(parts[0] == "phb"):
+            self.session.setPhb(self.number, float(parts[1]))
+
+        self.session.updateMotor(self.number, message)
+
+        combined = itertools.chain(self.session.activePlayers, self.session.activeOverriders)
+        for c in [c for c in combined if c.number == self.number and c != self]:
+            self.session.sendMotorParams(c)
+
+    def onConnect(self):
+        self.session.overriderConnected(self)
+        self.sendMessage(f"ID {self.number}")
+
+    def onDisconnect(self):
+        self.session.playerDisconnected(self)
+
 
 class TaskEntry:
     def __init__(self, strings: dict[str, str], completed: bool = False):
@@ -128,6 +169,7 @@ class EDMOSession:
         protocol.onMessageReceived = self.messageReceived
 
         self.activePlayers: list[EDMOPlayer] = []
+        self.activeOverriders : list[EDMOPlayer] = []
         self.waitingPlayers: list[EDMOPlayer] = []
 
         self.offsetTime = 0
@@ -154,13 +196,21 @@ class EDMOSession:
 
         return True
 
+    def registerOverrider(self, rtcPeer : WebRTCPeer, overrideID: int):
+        overrider = EDMOOveridePlayer(rtcPeer, overrideID, self)
+
+        self.activeOverriders.append(overrider)
+
+        return True
+
+
     # The player finally connected
     # A motor is assigned to the player
     def playerConnected(self, player: EDMOPlayer):
         player.assignNumber(heapq.heappop(self.playerNumbers))
         self.waitingPlayers.remove(player)
         self.activePlayers.append(player)
-        self.sessionLog.write("Session", f"Player {player.number} connected. ({player.name})")
+        self.sessionLog.write("Session", message=f"Player {player.number} connected. ({player.name})")
 
         self.broadcastPlayerList()
         player.sendMessage(f"TaskInfo {json.dumps(self.getTasks())}")
@@ -170,30 +220,28 @@ class EDMOSession:
         
         pass
 
+    def overriderConnected(self, overrider : EDMOOveridePlayer):
+        self.sessionLog.write("Session", message=f"Overrider for {overrider.number} connected.")
+
+        self.broadcastPlayerList()
+        overrider.sendMessage(f"TaskInfo {json.dumps(self.getTasks())}")
+        self.sendMotorParams(overrider)
+        overrider.sendMessage(f"HelpEnabled {"1" if self.helpEnabled else "0"}")
+        overrider.sendMessage(f"SimpleMode {"1" if self.simpleMode else "0"}")
+
+
     # The player has disconnected (due to network faults)
     # A reconnection may happen so we place them into the waiting list
     def playerDisconnected(self, player: EDMOPlayer):
         self.sessionLog.write("Session", f"Player {player.number} disconnected. ({player.name})")
 
         self.activePlayers.remove(player)
-        self.waitingPlayers.append(player)
 
         self.broadcastPlayerList()
 
         if player.number != -1:
             heapq.heappush(self.playerNumbers, player.number)
             self.playerNumbers
-            player.number = -1
-
-    # The player connection has been closed
-    #  either due to unrecoverable connection failure
-    #  or through player intention
-    # We remove all references to the player instance
-    def playerLeft(self, player: EDMOPlayer):
-        self.sessionLog.write("Session", f"Player {player.number} left.")
-
-        if player.number != -1:
-            heapq.heappush(self.playerNumbers,  player.number)
             player.number = -1
 
         removeIfExist(self.activePlayers, player)
@@ -204,6 +252,13 @@ class EDMOSession:
             self.removeSelf(self)
 
         pass
+
+    # The player has disconnected (due to network faults)
+    # A reconnection may happen so we place them into the waiting list
+    def overriderDisconnected(self, overrider: EDMOPlayer):
+        self.sessionLog.write("Session", f"Overrider for {overrider.number} disconnected.")
+
+        removeIfExist(self.activeOverriders, overrider)
 
     # If the edmo associated with this session is reconnected
     # We realign the edmo timestamp back with the session timestamp
@@ -248,7 +303,9 @@ class EDMOSession:
         recipient.sendMessage(f"amp {motor._amp}")
         recipient.sendMessage(f"freq {motor._freq}")
         recipient.sendMessage(f"off {motor._offset}")
-        recipient.sendMessage(f"phb {motor._phaseShift}")
+
+        for motor in self.motors:
+            recipient.sendMessage(f"phb {motor._id} {motor._phaseShift}")
 
     def setFreq(self,newValue:float):
         for motor in self.motors:
@@ -256,6 +313,12 @@ class EDMOSession:
 
         for player in self.activePlayers:
             player.sendMessage(f"freq {newValue}")
+
+    def setPhb(self, id : int, newValue:float):
+        for player in self.activePlayers:
+            if(player.number == id):
+                continue
+            player.sendMessage(f"phb {id} {newValue}")
 
 
     # Update the state of the actual edmo robot

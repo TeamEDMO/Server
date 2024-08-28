@@ -1,6 +1,7 @@
 # Handles everything
 
 import asyncio
+from asyncio import tasks
 from typing import AsyncIterator
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -65,6 +66,7 @@ class EDMOBackend:
     def removeSession(self, session: EDMOSession):
         identifier = session.protocol.identifier
         if identifier in self.activeSessions:
+            asyncio.create_task(self.activeSessions[identifier].close())
             del self.activeSessions[identifier]
 
     # endregion
@@ -88,14 +90,20 @@ class EDMOBackend:
 
             username = data["playerName"]
             sessionDescription = object_from_string(data["handshake"])
-
+            hasOverrideID = "overrideID" in data
             if isinstance(sessionDescription, RTCSessionDescription):
                 player = WebRTCPeer(request.remote)
 
                 session = self.getEDMOSession(identifier)
 
                 if session is not None:
-                    if not session.registerPlayer(player, username):
+                    if hasOverrideID:
+                        if not session.registerOverrider(
+                            player, int(data["overrideID"])
+                        ):
+                            return web.Response(status=401)
+
+                    elif not session.registerPlayer(player, username):
                         return web.Response(status=401)
 
                 answer = await player.initiateConnection(sessionDescription)
@@ -264,7 +272,6 @@ class EDMOBackend:
         await site.start()
 
         await self.fusedCommunication.initialize()
-
 
         closed = False
 

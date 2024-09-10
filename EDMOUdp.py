@@ -50,7 +50,7 @@ class EDMOUdp(DatagramProtocol):
         self.transport, _ = await loop.create_datagram_endpoint(
             lambda: self,
             local_addr=("0.0.0.0", 2122),
-            reuse_port=True,
+            reuse_port=False,
             allow_broadcast=True,
         )
 

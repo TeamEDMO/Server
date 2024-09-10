@@ -18,7 +18,7 @@ class SerialProtocol(asyncio.Protocol):
         self.identifier = ""
         self.closed = False
         self.device = ""
-        
+
         self.receivingData = False
         self.receiveBuffer = bytearray()
 
@@ -41,7 +41,9 @@ class SerialProtocol(asyncio.Protocol):
             self.receiveBuffer.append(data[i])
 
             # Do we have a header?
-            if len(self.receiveBuffer) >= 2 and self.receiveBuffer.endswith(EDMOPacket.HEADER):
+            if len(self.receiveBuffer) >= 2 and self.receiveBuffer.endswith(
+                EDMOPacket.HEADER
+            ):
                 self.receiveBuffer = self.receiveBuffer[:2]
                 self.receivingData = True
 
@@ -133,7 +135,7 @@ class EDMOSerial:
         for port in ports:
             # We only care about M0's at the moment
             # This can be expanded if we ever use other boards
-            if port.description == "Feather M0":
+            if ("USB" in port.description) or (port.description == "Feather M0"):
                 connectionTasks.append(
                     asyncio.create_task(self.initializeConnection(port))
                 )

@@ -334,8 +334,6 @@ class EDMOSession:
             # print(command)
             self.protocol.write(command)
 
-        self.protocol.write(EDMOPacket.create(EDMOCommands.SEND_MOTOR_DATA))
-        self.protocol.write(EDMOPacket.create(EDMOCommands.SEND_IMU_DATA))
         self.protocol.write(EDMOPacket.create(EDMOCommands.GET_TIME))
         await self.sessionLog.update()
 
@@ -366,7 +364,34 @@ class EDMOSession:
             self.parseIMUPacket(command.Data)
             # log IMU data
             pass
+        elif command.Instruction == EDMOCommands.SEND_ALL_DATA:
+            self.parseDataPacket(command.Data)
         pass
+
+    def parseDataPacket(self, data:bytes):
+        parsedContent = struct.unpack("<LffffffffffffffffffffLB3xfffLB3xfffLB3xfffLB3xfffLB3xffff", data)
+        self.offsetTime = parsedContent[0]
+
+        for i in range(0, 3):
+            start = 1 + 5 * i
+            motorData = parsedContent[start:]
+            stringified = f"Frequency: {motorData[1]}, Amplitude: {motorData[2]}, Offset: {motorData[3]}, Phase Shift: {motorData[4]}, Phase: {motorData[5]}"
+            self.sessionLog.write(f"Motor{i}", stringified)
+
+        imuData = parsedContent[21:]
+
+        accelaration = f"Acceleration: {{Time: {imuData[0]}, Status: {imuData[1]}, Value: ({imuData[2]},{imuData[3]},{imuData[4]})}}"
+        gyroscope = f"Gyroscope: {{Time: {imuData[5]}, Status: {imuData[6]}, Value: ({imuData[7]},{imuData[8]},{imuData[9]})}}"
+        magnetic = f"Magnetic: {{Time: {imuData[10]}, Status: {imuData[11]}, Value: ({imuData[12]},{imuData[13]},{imuData[14]})}}"
+        gravity = f"Gravity: {{Time: {imuData[15]}, Status: {imuData[16]}, Value: ({imuData[17]},{imuData[18]},{imuData[19]})}}"
+        rotation = f"Rotation: {{Time: {imuData[20]}, Status: {imuData[21]}, Value: ({imuData[22]},{imuData[23]},{imuData[24]}, {imuData[25]})}}"
+
+        final = f"{{{accelaration},{gyroscope},{magnetic},{gravity}, {rotation}}}"
+
+        self.sessionLog.write("IMU", final)
+
+        pass
+
 
 
     def parseMotorPacket(self, data:bytes):

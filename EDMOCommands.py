@@ -11,11 +11,12 @@ class EDMOCommands:
         SEND_IMU_DATA,
     ) = range(6)
 
+    SEND_ALL_DATA = 69
     INVALID = -1
 
     @classmethod
     def sanitize(cls, instruction: int):
-        if instruction not in range(6):
+        if instruction not in range(6) and instruction != cls.SEND_ALL_DATA:
             return cls.INVALID
 
         return instruction

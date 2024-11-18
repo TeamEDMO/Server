@@ -372,7 +372,7 @@ class EDMOSession:
         parsedContent = struct.unpack("<LffffffffffffffffffffLB3xfffLB3xfffLB3xfffLB3xfffLB3xffff", data)
         self.offsetTime = parsedContent[0]
 
-        for i in range(0, 3):
+        for i in range(0, 4):
             start = 1 + 5 * i
             motorData = parsedContent[start:]
             stringified = f"Frequency: {motorData[1]}, Amplitude: {motorData[2]}, Offset: {motorData[3]}, Phase Shift: {motorData[4]}, Phase: {motorData[5]}"
